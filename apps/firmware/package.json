@@ -1,0 +1,13 @@
+{
+  "name": "@chargelatch/firmware",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "test:unit": "components/sdm_meter/test_host/run.sh",
+    "firmware:build": "idf.py build",
+    "firmware:flash": "idf.py flash monitor",
+    "firmware:monitor": "idf.py monitor",
+    "firmware:menuconfig": "idf.py menuconfig",
+    "firmware:clean": "idf.py fullclean"
+  }
+}

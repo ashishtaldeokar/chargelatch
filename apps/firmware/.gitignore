@@ -1,0 +1,11 @@
+# ESP-IDF
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock.bak
+
+# pytest-embedded
+__pycache__/
+.pytest_cache/
+pytest_embedded_log/

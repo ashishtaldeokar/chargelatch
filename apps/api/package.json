@@ -1,0 +1,31 @@
+{
+  "name": "@chargelatch/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/app.ts",
+    "./auth": "./src/auth.ts",
+    "./devices": "./src/devices.ts",
+    "./users": "./src/users.ts",
+    "./device-bus": "./src/device-bus.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test:unit": "bun test",
+    "typecheck": "tsc --noEmit",
+    "openapi": "bun src/cli/openapi.ts"
+  },
+  "dependencies": {
+    "@chargelatch/db": "workspace:*",
+    "@chargelatch/nvs-partition": "workspace:*",
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.6.3",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.13.8",
+    "jose": "^6.2.12",
+    "mqtt": "^5.16.0",
+    "zod": "^4.6.5"
+  }
+}

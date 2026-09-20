@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  esbuild: true
+  # optional native speedups pulled in by testcontainers; not needed
+  cpu-features: false
+  protobufjs: false
+  ssh2: false

@@ -1,0 +1,8 @@
+/* chargelatch login theme: placeholder styling that proves the theme plumbing works. */
+:root {
+  --chargelatch-accent: #16a34a;
+}
+
+.pf-v5-c-login__main {
+  border-top: 4px solid var(--chargelatch-accent);
+}

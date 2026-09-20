@@ -1,0 +1,191 @@
+{
+  "id": "ed890cea-dab6-49f1-9921-d2c1822b1b43",
+  "prevId": "7e9d0000-2904-4777-a140-979f6d1064bc",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.devices": {
+      "name": "devices",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "devices_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "2147483647",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "identity": {
+          "name": "identity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "generated": {
+            "as": "'SONIK-' || id::text",
+            "type": "stored"
+          }
+        },
+        "provisioning_pop": {
+          "name": "provisioning_pop",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "replace(gen_random_uuid()::text, '-', '')"
+        },
+        "mac_address": {
+          "name": "mac_address",
+          "type": "macaddr",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chip_type": {
+          "name": "chip_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chip_revision": {
+          "name": "chip_revision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "chip_features": {
+          "name": "chip_features",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "crystal_mhz": {
+          "name": "crystal_mhz",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "flash_size_bytes": {
+          "name": "flash_size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "firmware_version": {
+          "name": "firmware_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "flash_count": {
+          "name": "flash_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_flashed_at": {
+          "name": "last_flashed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "devices_identity_unique": {
+          "name": "devices_identity_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "identity"
+          ]
+        },
+        "devices_mac_address_unique": {
+          "name": "devices_mac_address_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "mac_address"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

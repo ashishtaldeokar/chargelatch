@@ -1,0 +1,194 @@
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import type { Device } from "@chargelatch/db";
+import { streamSSE } from "hono/streaming";
+import { requireRole, type AuthEnv, type TokenVerifier } from "./auth.ts";
+import { BusUnavailableError, DeviceOfflineError, DeviceTimeoutError, type DeviceBus, type LiveDeviceState } from "./device-bus.ts";
+import type { DeviceStore } from "./devices.ts";
+import { defaultHook, json } from "./openapi.ts";
+import {
+  DeviceIdentityParamSchema,
+  ErrorSchema,
+  LiveDeviceSchema,
+  ProvisioningInfoSchema,
+  RelayStateSchema,
+  SetRelaySchema,
+} from "./schemas.ts";
+
+const base = { tags: ["admin"], security: [{ bearerAuth: [] }] };
+const authErrors = {
+  401: json(ErrorSchema, "Missing or invalid bearer token"),
+  403: json(ErrorSchema, 'The token lacks the "admin" realm role'),
+};
+const notFound = { 404: json(ErrorSchema, "No such device") };
+
+const toLiveDevice = (device: Device, live: LiveDeviceState) => ({
+  identity: device.identity,
+  macAddress: device.macAddress,
+  chipType: device.chipType,
+  firmwareVersion: device.firmwareVersion,
+  online: live.online,
+  firmware: live.firmware,
+  relay: live.relay,
+  meter: live.meter,
+});
+
+export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, verifier: TokenVerifier) {
+  const provisioningRoute = createRoute({
+    ...base,
+    method: "get",
+    path: "/api/admin/devices/{identity}/provisioning",
+    summary: "What the admin app needs to pair a device to Wi-Fi over BLE",
+    description:
+      "The admin app scans for a device advertising its identity as BLE name, then fetches the per-device " +
+      "proof-of-possession here to open the security 1 provisioning session.",
+    request: { params: DeviceIdentityParamSchema },
+    responses: {
+      200: json(ProvisioningInfoSchema, "Provisioning parameters, including the secret PoP"),
+      400: json(ErrorSchema, "Malformed identity"),
+      ...authErrors,
+      ...notFound,
+    },
+  });
+
+  const listRoute = createRoute({
+    ...base,
+    method: "get",
+    path: "/api/admin/devices",
+    summary: "Registered devices with their live state",
+    responses: { 200: json(z.array(LiveDeviceSchema), "Newest first, at most 200"), ...authErrors },
+  });
+
+  const getRoute = createRoute({
+    ...base,
+    method: "get",
+    path: "/api/admin/devices/{identity}",
+    summary: "One device: online status, relay state and latest meter reading",
+    request: { params: DeviceIdentityParamSchema },
+    responses: { 200: json(LiveDeviceSchema, "The device"), 400: json(ErrorSchema, "Malformed identity"), ...authErrors, ...notFound },
+  });
+
+  const getRelayRoute = createRoute({
+    ...base,
+    method: "get",
+    path: "/api/admin/devices/{identity}/relay",
+    summary: "Current relay (contactor) state as last reported by the device",
+    request: { params: DeviceIdentityParamSchema },
+    responses: {
+      200: json(RelayStateSchema, "The relay state"),
+      400: json(ErrorSchema, "Malformed identity"),
+      ...authErrors,
+      404: json(ErrorSchema, "No such device, or it has not reported a relay state yet"),
+    },
+  });
+
+  const setRelayRoute = createRoute({
+    ...base,
+    method: "put",
+    path: "/api/admin/devices/{identity}/relay",
+    summary: "Switch the relay (contactor) on or off",
+    description:
+      "Sends the command over MQTT and waits for the device to report the new state, so 200 means the device " +
+      "really switched. Idempotent: asking for the state it is already in also succeeds.",
+    request: { params: DeviceIdentityParamSchema, body: { ...json(SetRelaySchema, "Desired state"), required: true } },
+    responses: {
+      200: json(RelayStateSchema, "The state the device reported after executing the command"),
+      400: json(ErrorSchema, "Invalid request"),
+      ...authErrors,
+      ...notFound,
+      409: json(ErrorSchema, "The device is offline"),
+      503: json(ErrorSchema, "The API is not connected to the MQTT broker"),
+      504: json(ErrorSchema, "The device did not confirm in time; its state is unknown"),
+    },
+  });
+
+  const routes = new OpenAPIHono<AuthEnv>({ defaultHook });
+  routes.use("/api/admin/*", requireRole(verifier, "admin"));
+
+  // Server-sent events: one `device` event per state change of any registered device. Consumed
+  // with fetch() rather than EventSource, because EventSource cannot send the bearer token.
+  routes.get("/api/admin/devices/events", (c) =>
+    streamSSE(c, async (stream) => {
+      const registered = new Map((await devices.list(200)).map((device) => [device.identity, device]));
+      const queue: LiveDeviceState[] = [];
+      let wake: (() => void) | undefined;
+      const unsubscribe = bus.subscribe((state) => {
+        queue.push(state);
+        wake?.();
+      });
+      stream.onAbort(() => {
+        unsubscribe();
+        wake?.();
+      });
+
+      try {
+        // Flushes the response headers right away. Without it a client (and any proxy in between)
+        // sees nothing until the first device event, and cannot tell "connected" from "hanging".
+        await stream.write(": connected\n\n");
+        while (!stream.aborted) {
+          const state = queue.shift();
+          if (!state) {
+            // Idle: wait for the next change, or send a comment every 20 s so proxies keep the stream open.
+            const timedOut = await new Promise<boolean>((resolve) => {
+              const timer = setTimeout(() => resolve(true), 20_000);
+              wake = () => {
+                clearTimeout(timer);
+                resolve(false);
+              };
+            });
+            wake = undefined;
+            if (timedOut && !stream.aborted) await stream.write(": keep-alive\n\n");
+            continue;
+          }
+          // The broker is anonymous: only forward devices that exist in the registry. Devices
+          // registered after this stream opened are looked up once.
+          let device = registered.get(state.identity);
+          if (!device) {
+            device = await devices.getByIdentity(state.identity);
+            if (device) registered.set(device.identity, device);
+          }
+          if (device) await stream.writeSSE({ event: "device", data: JSON.stringify(toLiveDevice(device, state)) });
+        }
+      } finally {
+        unsubscribe();
+      }
+    }),
+  );
+
+  return routes
+    .openapi(provisioningRoute, async (c) => {
+      const device = await devices.getByIdentity(c.req.valid("param").identity);
+      if (!device) return c.json({ error: "No such device" }, 404);
+
+      c.header("cache-control", "no-store");
+      return c.json({ identity: device.identity, securityVersion: 1 as const, pop: device.provisioningPop }, 200);
+    })
+    .openapi(listRoute, async (c) => c.json((await devices.list(200)).map((device) => toLiveDevice(device, bus.getState(device.identity))), 200))
+    .openapi(getRoute, async (c) => {
+      const device = await devices.getByIdentity(c.req.valid("param").identity);
+      if (!device) return c.json({ error: "No such device" }, 404);
+      return c.json(toLiveDevice(device, bus.getState(device.identity)), 200);
+    })
+    .openapi(getRelayRoute, async (c) => {
+      const device = await devices.getByIdentity(c.req.valid("param").identity);
+      const relay = device && bus.getState(device.identity).relay;
+      if (!relay) return c.json({ error: device ? "The device has not reported a relay state yet" : "No such device" }, 404);
+      return c.json(relay, 200);
+    })
+    .openapi(setRelayRoute, async (c) => {
+      // Only registered devices can be commanded, whatever else is talking on the broker.
+      const device = await devices.getByIdentity(c.req.valid("param").identity);
+      if (!device) return c.json({ error: "No such device" }, 404);
+
+      const { on } = c.req.valid("json");
+      try {
+        const relay = await bus.setRelay(device.identity, on);
+        console.log(`relay ${device.identity} -> ${on ? "on" : "off"} by ${c.var.auth.email ?? c.var.auth.sub}`);
+        return c.json(relay, 200);
+      } catch (error) {
+        if (error instanceof DeviceOfflineError) return c.json({ error: error.message }, 409);
+        if (error instanceof DeviceTimeoutError) return c.json({ error: error.message }, 504);
+        if (error instanceof BusUnavailableError) return c.json({ error: error.message }, 503);
+        throw error;
+      }
+    });
+}

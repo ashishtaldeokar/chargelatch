@@ -1,0 +1,23 @@
+menu "chargelatch MQTT"
+
+    config DEVICE_MQTT_BROKER_URI
+        string "Broker URI"
+        default ""
+        help
+            Where the device connects once it is on Wi-Fi, e.g. mqtt://broker.example.com:1883.
+            The project value is set in sdkconfig.defaults.
+
+            To test against the dev EMQX from `pnpm services:up`, override it here with the LAN
+            address of your machine (mqtt://192.168.x.y:1883), NOT localhost: the device is a
+            separate host on your Wi-Fi. The override lands in your local, gitignored sdkconfig.
+            If this is empty, device_mqtt_start() fails with a clear log line.
+
+    config DEVICE_MQTT_KEEPALIVE_SECONDS
+        int "Keepalive (seconds)"
+        default 30
+        range 5 600
+        help
+            The broker considers the device gone, and publishes its last will ("offline"), after
+            1.5x this long without traffic.
+
+endmenu

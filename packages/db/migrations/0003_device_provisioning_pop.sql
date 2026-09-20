@@ -1,0 +1,1 @@
+ALTER TABLE "devices" ADD COLUMN "provisioning_pop" text DEFAULT replace(gen_random_uuid()::text, '-', '') NOT NULL;

@@ -1,0 +1,69 @@
+# Local dev infrastructure. The e2e suite does NOT use these containers; it builds the same
+# infra/<service> images through Testcontainers (see apps/e2e/src/helpers).
+name: chargelatch
+
+services:
+  postgres:
+    # Postgres 17 + TimescaleDB + PostGIS, see infra/postgres/README.md.
+    build: ./infra/postgres
+    image: chargelatch/postgres:dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/home/postgres/pgdata
+    # Init scripts (databases + extensions) and the healthcheck are baked into the image.
+    # They run ONLY on first boot of an empty volume. See infra/postgres/README.md.
+
+  keycloak:
+    build: ./infra/keycloak
+    image: chargelatch/keycloak:dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Postgres (not the embedded dev DB) so admin-console changes survive restarts.
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+    volumes:
+      # Live theme editing: start-dev disables theme caching, so a browser refresh is enough.
+      # E2E and production get themes from the image build instead.
+      - ./infra/keycloak/themes:/opt/keycloak/themes
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    # Pure cache: deliberately NO volume. Everything in it can be rebuilt from Postgres,
+    # so losing it on restart is fine. protected-mode is off because the container network
+    # is the boundary; never publish this port beyond it in production.
+    build: ./infra/redis
+    image: chargelatch/redis:dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  emqx:
+    # MQTT broker for DEV and E2E only; real devices use the project broker configured in
+    # apps/firmware/sdkconfig.defaults. Deliberately NO volume: EMQX
+    # persists dashboard/API config changes in its data dir, and keeping that would let a dev
+    # environment drift from infra/emqx/emqx.conf. Retained messages and sessions are lost on
+    # restart, which is fine for dev. ANONYMOUS access for now, see infra/emqx/README.md.
+    build: ./infra/emqx
+    image: chargelatch/emqx:dev
+    restart: unless-stopped
+    ports:
+      - "1883:1883" # MQTT (devices; must be reachable from the device's Wi-Fi network)
+      - "8083:8083" # MQTT over WebSocket
+      - "18083:18083" # dashboard
+
+volumes:
+  postgres-data:

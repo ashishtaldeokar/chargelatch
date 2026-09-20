@@ -1,0 +1,11 @@
+{
+  "name": "@chargelatch/admin-mobile",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "flutter run",
+    "test:unit": "flutter test",
+    "analyze": "flutter analyze",
+    "format": "dart format lib test"
+  }
+}

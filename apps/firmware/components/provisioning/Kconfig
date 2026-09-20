@@ -1,0 +1,111 @@
+menu "chargelatch Wi-Fi provisioning"
+
+    choice PROVISIONING_PROV_TRANSPORT
+        bool "Provisioning Transport"
+        default PROVISIONING_PROV_TRANSPORT_SOFTAP if IDF_TARGET_ESP32S2
+        default PROVISIONING_PROV_TRANSPORT_BLE
+        help
+            Wi-Fi provisioning component offers both, SoftAP and BLE transports. Choose any one.
+
+        config PROVISIONING_PROV_TRANSPORT_BLE
+            bool "BLE"
+            select BT_ENABLED
+            depends on !IDF_TARGET_ESP32S2
+        config PROVISIONING_PROV_TRANSPORT_SOFTAP
+            bool "Soft AP"
+            select LWIP_IPV4
+    endchoice
+
+    choice PROVISIONING_PROV_SECURITY_VERSION
+        bool "Protocomm security version"
+        default PROVISIONING_PROV_SECURITY_VERSION_1
+        help
+            Security version 1 (X25519 + proof-of-possession) is what the admin mobile app speaks:
+            its esp_provisioning_ble library does not implement version 2. Only change this
+            together with the app.
+
+        config PROVISIONING_PROV_SECURITY_VERSION_1
+            bool "Security version 1"
+            select ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_1
+
+        config PROVISIONING_PROV_SECURITY_VERSION_2
+            bool "Security version 2"
+            select ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_2
+    endchoice
+
+    config PROVISIONING_PROV_DEV_POP
+        string "Development proof-of-possession"
+        depends on PROVISIONING_PROV_SECURITY_VERSION_1
+        default "abcd1234"
+        help
+            Shared PoP used only when the application passes none, i.e. on a board that did not
+            go through the factory app and so has no per-device PoP. Not a secret: never rely
+            on it for deployed devices.
+
+    choice PROVISIONING_PROV_MODE
+        bool "Security version 2 mode"
+        depends on PROVISIONING_PROV_SECURITY_VERSION_2
+        default PROVISIONING_PROV_SEC2_DEV_MODE
+
+        config PROVISIONING_PROV_SEC2_DEV_MODE
+            bool "Security version 2 development mode"
+            depends on PROVISIONING_PROV_SECURITY_VERSION_2
+            help
+                This enables the development mode for
+                security version 2.
+                Please note that this mode is NOT recommended for production purpose.
+
+        config PROVISIONING_PROV_SEC2_PROD_MODE
+            bool "Security version 2 production mode"
+            depends on PROVISIONING_PROV_SECURITY_VERSION_2
+            help
+                This enables the production mode for
+                security version 2.
+    endchoice
+
+    config PROVISIONING_PROV_TRANSPORT
+        int
+        default 1 if PROVISIONING_PROV_TRANSPORT_BLE
+        default 2 if PROVISIONING_PROV_TRANSPORT_SOFTAP
+
+    config PROVISIONING_RESET_PROVISIONED
+        bool
+        default n
+        prompt "Reset provisioned status of the device"
+        help
+            This erases the NVS to reset provisioned status of the device on every reboot.
+            Provisioned status is determined by the Wi-Fi STA configuration, saved on the NVS.
+
+    config PROVISIONING_RESET_PROV_MGR_ON_FAILURE
+        bool
+        default y
+        prompt "Reset provisioned credentials and state machine after session failure"
+        help
+            Enable reseting provisioned credentials and state machine after session failure.
+            This will restart the provisioning service after retries are exhausted.
+
+    config PROVISIONING_PROV_MGR_MAX_RETRY_CNT
+        int
+        default 5
+        prompt "Max retries before reseting provisioning state machine"
+        depends on PROVISIONING_RESET_PROV_MGR_ON_FAILURE
+        help
+            Set the Maximum retry to avoid reconnecting to an inexistent AP or if credentials
+            are misconfigured. Provisioned credentials are erased and internal state machine
+            is reset after this threshold is reached.
+
+    config PROVISIONING_PROV_USING_BLUEDROID
+        bool
+        depends on (BT_BLUEDROID_ENABLED && (IDF_TARGET_ESP32C3 || IDF_TARGET_ESP32S3))
+        select BT_BLE_42_FEATURES_SUPPORTED
+        default y
+        help
+            This enables BLE 4.2 features for Bluedroid.
+
+    config PROVISIONING_REPROVISIONING
+        bool "Re-provisioning"
+        help
+            Enable re-provisioning - allow the device to provision for new credentials
+            after previous successful provisioning.
+
+endmenu

@@ -1,0 +1,27 @@
+{
+  "name": "@chargelatch/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts",
+    "./migrate": "./src/migrate.ts",
+    "./seed": "./src/seed.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun run src/cli/migrate.ts",
+    "db:seed": "bun run src/cli/seed.ts",
+    "db:reset": "bun run src/cli/reset.ts",
+    "db:studio": "drizzle-kit studio",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10"
+  }
+}

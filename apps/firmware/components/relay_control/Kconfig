@@ -1,0 +1,26 @@
+menu "chargelatch relay"
+
+    config RELAY_GPIO
+        int "Relay trigger GPIO"
+        default 26
+        help
+            Drives the relay module that switches the contactor.
+
+    config RELAY_ACTIVE_HIGH
+        bool "Relay is active high"
+        default y
+        help
+            y: GPIO high energises the relay ("high level trigger" modules, transistor drivers).
+            n: GPIO low energises it (many opto-isolated relay boards).
+            Getting this wrong closes the contactor whenever the firmware thinks it is open,
+            including at boot.
+
+    config RELAY_RESTORE_STATE
+        bool "Restore the last state after a reboot"
+        default y
+        help
+            y: the on/off state is stored in NVS and re-applied at boot, so the contactor closes
+               again by itself after a reset or power cut if it was on before.
+            n: always start with the relay off.
+
+endmenu

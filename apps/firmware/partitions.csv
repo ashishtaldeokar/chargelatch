@@ -1,0 +1,12 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# 4MB flash (CONFIG_ESPTOOLPY_FLASHSIZE_4MB in sdkconfig.defaults).
+# Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
+nvs,      data, nvs,     ,      0x6000,
+phy_init, data, phy,     ,      0x1000,
+# Per-device factory data (identity, provisioning PoP, later certificates), written once by the
+# factory app. The label and the "factory"/"identity" NVS namespace/key are a contract with
+# apps/api (src/factory.ts) and apps/factory; firmware only ever opens it read-only.
+fctry,    data, nvs,     ,      0x6000,
+# 3MB app. The ~0xE0000 after it is unallocated on purpose: room for e.g. a coredump or storage
+# partition. Moving to OTA (two app slots) would mean re-laying this out and re-flashing by wire.
+factory,  app,  factory, ,      0x300000,

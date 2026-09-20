@@ -1,0 +1,21 @@
+{
+  "name": "@chargelatch/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "bun test --timeout 300000 ./src/",
+    "test:e2e:browser": "bun run src/run.ts",
+    "test:e2e:browser:ui": "bun run src/run.ts --ui",
+    "e2e:install": "playwright install chromium",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@chargelatch/api": "workspace:*",
+    "@chargelatch/db": "workspace:*",
+    "@playwright/test": "^1.63.0",
+    "drizzle-orm": "^0.45.2",
+    "mqtt": "^5.16.0",
+    "testcontainers": "^12.1.0"
+  }
+}

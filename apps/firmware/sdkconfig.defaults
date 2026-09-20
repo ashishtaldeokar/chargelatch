@@ -1,0 +1,18 @@
+# Override some defaults so BT stack is enabled and
+CONFIG_BT_ENABLED=y
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=n
+CONFIG_BTDM_CTRL_MODE_BTDM=n
+CONFIG_BT_NIMBLE_ENABLED=y
+
+## For Bluedroid as binary is larger than default size
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+## 4MB flash; partitions.csv is laid out for it. The factory app refuses chips with less.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+## MQTT broker the devices connect to. The EMQX in docker-compose is for dev/e2e only; to point a
+## build at it instead, override this in `idf.py menuconfig` with mqtt://<your LAN IP>:1883.
+CONFIG_DEVICE_MQTT_BROKER_URI="mqtt://ashishtaldeokar.ddns.net:1883"

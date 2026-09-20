@@ -1,0 +1,11 @@
+key,type,encoding,value
+factory,namespace,,
+identity,data,string,"SONIK-4242"
+hw_rev,data,u8,"3"
+batch,data,u16,"65535"
+serial,data,u32,"4000000000"
+offset,data,i32,"-123456"
+tiny,data,i8,"-128"
+cal,data,i16,"-32768"
+certs,namespace,,
+note,data,string,"second namespace"

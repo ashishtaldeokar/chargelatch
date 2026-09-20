@@ -1,0 +1,70 @@
+menu "chargelatch SDM energy meter"
+
+    choice SDM_METER_MODEL
+        prompt "Meter model"
+        default SDM_METER_MODEL_SDM120
+        help
+            Selects the register map (components/sdm_meter/sdm_registers.c).
+
+        config SDM_METER_MODEL_SDM120
+            bool "Eastron SDM120 (1-phase)"
+        config SDM_METER_MODEL_SDM630
+            bool "Eastron SDM630 (3-phase)"
+    endchoice
+
+    config SDM_METER_SLAVE_ADDRESS
+        int "Modbus slave address"
+        default 1
+        range 1 247
+        help
+            Meter ID as set on the meter (SDM120: hold the button, "Id"). Factory default 1.
+
+    config SDM_METER_BAUD_RATE
+        int "Baud rate"
+        default 2400
+        help
+            Must match the meter. SDM120 factory default is 2400 (1200-9600 selectable);
+            SDM630 is 9600.
+
+    choice SDM_METER_PARITY
+        prompt "Parity"
+        default SDM_METER_PARITY_NONE
+        help
+            Eastron factory default is none (8N1).
+
+        config SDM_METER_PARITY_NONE
+            bool "None (8N1)"
+        config SDM_METER_PARITY_EVEN
+            bool "Even (8E1)"
+        config SDM_METER_PARITY_ODD
+            bool "Odd (8O1)"
+    endchoice
+
+    config SDM_METER_UART_NUM
+        int "UART port"
+        default 2
+        range 1 2
+        help
+            UART0 is the console. The devkit's "RX2/TX2" pins are UART2.
+
+    config SDM_METER_TX_GPIO
+        int "TX GPIO (to the transceiver's DI)"
+        default 17
+        help
+            "TX2" on ESP32 devkits. Note GPIO16/17 are taken by PSRAM on WROVER modules.
+
+    config SDM_METER_RX_GPIO
+        int "RX GPIO (from the transceiver's RO)"
+        default 16
+        help
+            "RX2" on ESP32 devkits.
+
+    config SDM_METER_DE_GPIO
+        int "DE / RE GPIO (RS-485 direction)"
+        default 4
+        help
+            Drives the transceiver's DE and /RE pins, tied together (MAX485-style modules): high
+            while transmitting, low while listening. The UART hardware toggles it per frame.
+            Set to -1 for a transceiver with automatic direction control.
+
+endmenu

@@ -1,0 +1,11 @@
+menu "chargelatch meter telemetry"
+
+    config METER_TELEMETRY_INTERVAL_SECONDS
+        int "Read and publish interval (seconds)"
+        default 5
+        range 2 3600
+        help
+            How often the meter is read and published to devices/<id>/meter. A full SDM120 read
+            takes about 1 s at 2400 baud, so going below 2 s is pointless.
+
+endmenu

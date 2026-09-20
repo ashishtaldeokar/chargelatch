@@ -1,0 +1,14 @@
+{
+  "name": "@chargelatch/nvs-partition",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test:unit": "bun test",
+    "fixtures": "bun test/generate-fixtures.ts",
+    "typecheck": "tsc --noEmit"
+  }
+}

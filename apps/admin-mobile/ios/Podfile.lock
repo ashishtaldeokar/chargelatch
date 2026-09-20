@@ -1,0 +1,29 @@
+PODS:
+  - esp_provisioning_ble (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - universal_ble (0.0.1):
+    - Flutter
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - esp_provisioning_ble (from `.symlinks/plugins/esp_provisioning_ble/ios`)
+  - Flutter (from `Flutter`)
+  - universal_ble (from `.symlinks/plugins/universal_ble/darwin`)
+
+EXTERNAL SOURCES:
+  esp_provisioning_ble:
+    :path: ".symlinks/plugins/esp_provisioning_ble/ios"
+  Flutter:
+    :path: Flutter
+  universal_ble:
+    :path: ".symlinks/plugins/universal_ble/darwin"
+
+SPEC CHECKSUMS:
+  esp_provisioning_ble: b65c16dc206de734b6175ea962908e8d0d9917e9
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  universal_ble: 65e1257dffc557cc7991a93d253beeddc7c1dc92
+
+PODFILE CHECKSUM: 53a6aebc29ccee84c41f92f409fc20cd4ca011f1
+
+COCOAPODS: 1.16.2
