@@ -3,6 +3,7 @@ import {
   decodeJwtPayload,
   FIXTURE_USERS,
   getAccessToken,
+  getServiceAccountToken,
   REALM,
   startKeycloak,
   type StartedKeycloak,
@@ -54,6 +55,13 @@ describe("realm import", () => {
     expect(factory.realm_access.roles).toContain("factory");
     const user = decodeJwtPayload<Claims>(await getAccessToken(keycloak.baseUrl, FIXTURE_USERS.user));
     expect(user.realm_access.roles).not.toContain("factory");
+  });
+
+  test("the automation service account gets an admin token without any user", async () => {
+    const claims = decodeJwtPayload<Claims>(await getServiceAccountToken(keycloak.baseUrl));
+    expect([claims.aud].flat()).toContain("chargelatch-api");
+    expect(claims.realm_access.roles).toContain("admin");
+    expect(claims.azp).toBe("chargelatch-automation");
   });
 
   test("rejects a wrong password", async () => {

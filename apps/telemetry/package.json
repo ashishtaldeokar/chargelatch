@@ -1,0 +1,22 @@
+{
+  "name": "@chargelatch/telemetry",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/ingest.ts",
+    "./writer": "./src/writer.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test:unit": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chargelatch/db": "workspace:*",
+    "@chargelatch/device-protocol": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "mqtt": "^5.16.0"
+  }
+}

@@ -21,6 +21,7 @@
 | `chargelatch-api`    | confidential         | secret `dev-secret`; direct-access (password) grant on, for tests/tooling |
 | `chargelatch-admin-web` | public, PKCE (S256) | redirects `http://localhost:5173/*`, `http://localhost:5273/*` (e2e)   |
 | `chargelatch-admin-mobile` | public, PKCE (S256) | redirect `com.sonik.chargelatch.admin:/*` (Flutter app id)      |
+| `chargelatch-automation` | confidential, **service account** | secret `dev-automation-secret`; `client_credentials` only (no user, no browser flow); its service-account user has realm role `admin`. For scripts, cron, integrations. |
 | `chargelatch-factory` | public, PKCE (S256) | redirects `http://localhost:5174/*`, `http://localhost:5274/*` (e2e)   |
 
 Every client has an audience mapper, so access tokens carry `aud: chargelatch-api`.
@@ -33,6 +34,13 @@ Realm roles: `admin`, `user`, `factory` (may issue device identities; enforced b
 | `admin@chargelatch.dev` | `admin`  | `admin`, `user`, `factory` |
 | `user@chargelatch.dev`  | `user`   | `user`          |
 | `factory@chargelatch.dev` | `factory` | `factory`, `user` |
+
+Machine-to-machine token (no user):
+
+```sh
+curl -s http://localhost:8080/realms/chargelatch/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=chargelatch-automation -d client_secret=dev-automation-secret
+```
 
 Admin console: <http://localhost:8080> with `admin` / `admin`. The fixture users, the
 `dev-secret` client secret and the bootstrap admin are all committed and public. A production

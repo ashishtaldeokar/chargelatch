@@ -11,7 +11,7 @@ import { createDb } from "@chargelatch/db";
 import { runMigrations } from "@chargelatch/db/migrate";
 import { startEmqx, type StartedEmqx } from "./helpers/emqx.ts";
 import { startFakeDevice, type FakeDevice } from "./helpers/fake-device.ts";
-import { FIXTURE_USERS, getAccessToken, REALM, startKeycloak, type StartedKeycloak } from "./helpers/keycloak.ts";
+import { FIXTURE_USERS, getAccessToken, getServiceAccountToken, REALM, startKeycloak, type StartedKeycloak } from "./helpers/keycloak.ts";
 import { startPostgres, type StartedPostgres } from "./helpers/postgres.ts";
 
 let postgres: StartedPostgres;
@@ -203,6 +203,17 @@ describe("device control over mqtt", () => {
       app.request("/api/admin/devices/SONIK-1/relay", { method: "PUT", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ on: true }) });
     expect((await put(factoryToken)).status).toBe(403);
     expect((await put("not.a.jwt")).status).toBe(401);
+    expect(device.relayOn()).toBe(false);
+  });
+
+  test("the automation service account can read state and switch the relay", async () => {
+    const token = await getServiceAccountToken(keycloak.baseUrl);
+    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    expect((await app.request("/api/admin/devices/SONIK-1", { headers })).status).toBe(200);
+    const res = await app.request("/api/admin/devices/SONIK-1/relay", { method: "PUT", headers, body: JSON.stringify({ on: true }) });
+    expect(res.status).toBe(200);
+    expect(device.relayOn()).toBe(true);
+    await app.request("/api/admin/devices/SONIK-1/relay", { method: "PUT", headers, body: JSON.stringify({ on: false }) });
     expect(device.relayOn()).toBe(false);
   });
 

@@ -13,6 +13,8 @@
   "devDependencies": {
     "@chargelatch/api": "workspace:*",
     "@chargelatch/db": "workspace:*",
+    "@chargelatch/device-protocol": "workspace:*",
+    "@chargelatch/telemetry": "workspace:*",
     "@playwright/test": "^1.63.0",
     "drizzle-orm": "^0.45.2",
     "mqtt": "^5.16.0",

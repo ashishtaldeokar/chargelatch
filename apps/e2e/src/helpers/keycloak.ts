@@ -6,6 +6,8 @@ export const KEYCLOAK_BUILD_CONTEXT = join(import.meta.dir, "../../../../infra/k
 
 export const REALM = "chargelatch";
 export const API_CLIENT = { id: "chargelatch-api", secret: "dev-secret" };
+/** Service account for machine-to-machine API access (client_credentials), realm role `admin`. */
+export const AUTOMATION_CLIENT = { id: "chargelatch-automation", secret: "dev-automation-secret" };
 export const FIXTURE_USERS = {
   admin: { username: "admin@chargelatch.dev", password: "admin" },
   user: { username: "user@chargelatch.dev", password: "user" },
@@ -70,6 +72,16 @@ export async function getAccessToken(baseUrl: string, grant: PasswordGrant): Pro
     }),
   });
   if (!res.ok) throw new Error(`token request failed: ${res.status} ${await res.text()}`);
+  return ((await res.json()) as { access_token: string }).access_token;
+}
+
+/** Mints an access token for a service-account client (no user involved). */
+export async function getServiceAccountToken(baseUrl: string, client = AUTOMATION_CLIENT, realm = REALM): Promise<string> {
+  const res = await fetch(`${baseUrl}/realms/${realm}/protocol/openid-connect/token`, {
+    method: "POST",
+    body: new URLSearchParams({ grant_type: "client_credentials", client_id: client.id, client_secret: client.secret }),
+  });
+  if (!res.ok) throw new Error(`service account token request failed: ${res.status} ${await res.text()}`);
   return ((await res.json()) as { access_token: string }).access_token;
 }
 

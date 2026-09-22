@@ -14,6 +14,12 @@ type Run =
   | { state: "idle" }
   | { state: "running" | "done" | "failed"; step?: Step; chip?: ChipInfo; device?: RegisteredDevice; error?: string };
 
+/** esptool-js's message when the ROM bootloader never answered its sync packets. */
+const SYNC_FAILED = /Failed to connect/i;
+const SYNC_HELP =
+  "The chip did not enter download mode. Hold the BOOT (IO0) button, press and release EN/RST, then click again while still holding BOOT. " +
+  "Also make sure no other program (idf.py monitor, a serial terminal) has the port open, and that the USB cable carries data.";
+
 const formatBytes = (bytes: number) => (bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(0)} MB` : `${(bytes / 1024).toFixed(0)} KB`);
 
 export function Station({ api, connect, loadFirmware }: StationProps) {
@@ -72,7 +78,7 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
       const message = error instanceof Error ? error.message : String(error);
       // Closing the port picker is not a failure worth shouting about.
       if (error instanceof DOMException && error.name === "NotFoundError") setRun({ state: "idle" });
-      else setRun((current) => ({ ...current, state: "failed", error: message }));
+      else setRun((current) => ({ ...current, state: "failed", error: SYNC_FAILED.test(message) ? `${message}. ${SYNC_HELP}` : message }));
       appendLog(`! ${message}`);
     } finally {
       await connection?.disconnect().catch(() => {});

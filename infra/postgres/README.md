@@ -13,7 +13,7 @@ aggregates and retention policies. The `-oss` tag variant is Apache-2 only and l
 | Database      | Owner                  | Extensions             |
 | ------------- | ---------------------- | ---------------------- |
 | `keycloak`    | Keycloak (dev compose) | (timescaledb, inherited from template1, unused) |
-| `chargelatch` | `apps/api`             | `timescaledb`, `postgis` |
+| `chargelatch` | `apps/api`, `apps/telemetry` | `timescaledb`, `postgis` |
 
 Dev credentials: `postgres` / `postgres` on `localhost:5432`.
 

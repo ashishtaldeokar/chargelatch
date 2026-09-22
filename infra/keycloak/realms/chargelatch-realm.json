@@ -372,6 +372,7 @@
       "security-admin-console": [],
       "chargelatch-api": [],
       "admin-cli": [],
+      "chargelatch-automation": [],
       "account-console": [],
       "broker": [
         {
@@ -584,6 +585,24 @@
         "factory",
         "default-roles-chargelatch",
         "user"
+      ],
+      "notBefore": 0,
+      "groups": []
+    },
+    {
+      "id": "2a28842e-e8a4-437e-bcd6-0715242ec288",
+      "username": "service-account-chargelatch-automation",
+      "emailVerified": false,
+      "enabled": true,
+      "createdTimestamp": 1790048993897,
+      "totp": false,
+      "serviceAccountClientId": "chargelatch-automation",
+      "credentials": [],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "admin",
+        "default-roles-chargelatch"
       ],
       "notBefore": 0,
       "groups": []
@@ -1012,6 +1031,69 @@
         "address",
         "phone",
         "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "id": "5ce39215-5bea-4356-919c-24ca3541c8e3",
+      "clientId": "chargelatch-automation",
+      "name": "chargelatch automation (service account)",
+      "description": "Machine-to-machine access to the API (client_credentials). No user, no browser flow.",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-automation-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "id": "e2863ecf-0d39-43bf-aaf1-563253ba1d44",
+          "name": "chargelatch-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "chargelatch-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "service_account",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "organization",
         "microprofile-jwt"
       ]
     },

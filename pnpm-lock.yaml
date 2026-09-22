@@ -309,6 +309,12 @@ importers:
       '@chargelatch/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@chargelatch/device-protocol':
+        specifier: workspace:*
+        version: link:../../packages/device-protocol
+      '@chargelatch/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -375,6 +381,21 @@ importers:
         version: 8.3.0(@types/node@26.6.1)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1)
 
   apps/firmware: {}
+
+  apps/telemetry:
+    dependencies:
+      '@chargelatch/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@chargelatch/device-protocol':
+        specifier: workspace:*
+        version: link:../../packages/device-protocol
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(bun-types@1.4.2)(postgres@3.4.9)
+      mqtt:
+        specifier: ^5.16.0
+        version: 5.16.0
 
   packages/db:
     dependencies:

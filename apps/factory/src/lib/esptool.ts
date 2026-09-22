@@ -63,6 +63,8 @@ export async function connectDevice(log: (line: string) => void, baudrate = 9216
       disconnect: () => transport.disconnect(),
     };
   } catch (error) {
+    // esptool-js prints "Connecting..." and its retry marks without a newline: show them.
+    if (line.trim()) log(line);
     await transport.disconnect().catch(() => {});
     throw error;
   }

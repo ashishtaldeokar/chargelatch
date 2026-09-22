@@ -34,6 +34,21 @@ test("shows the failure and always releases the serial port", async () => {
   expect(calls).toContain("disconnect");
 });
 
+test("a chip that will not enter download mode gets the BOOT-button instructions", async () => {
+  render(
+    <Station
+      api={fakeApi().api}
+      connect={async () => Promise.reject(new Error("Failed to connect with the device"))}
+      loadFirmware={async () => firmware}
+    />,
+  );
+  await screen.findByText("chargelatch_firmware 0.1.0");
+  await userEvent.click(screen.getByRole("button", { name: "Connect & flash device" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/Hold the BOOT \(IO0\) button/);
+  expect(screen.getByRole("button", { name: "Flash next device" })).toBeEnabled();
+});
+
 test("explains a missing firmware bundle and keeps flashing disabled", async () => {
   render(
     <Station
