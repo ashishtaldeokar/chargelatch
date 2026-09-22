@@ -4,6 +4,7 @@ import type { TokenVerifier } from "../src/auth.ts";
 import { applyMessage, emptyDeviceState, type LiveDeviceState } from "@chargelatch/device-protocol";
 import { DeviceOfflineError, DeviceTimeoutError, type DeviceBus } from "../src/device-bus.ts";
 import type { DeviceStore } from "../src/devices.ts";
+import type { PowerSample, TelemetryStore } from "../src/telemetry.ts";
 import type { UserStore } from "../src/users.ts";
 
 export function fakeUserStore(initial: User[] = []): UserStore {
@@ -90,4 +91,14 @@ export function fakeDeviceBus() {
   return { bus, deviceSays, unresponsive };
 }
 
-export const fakeDeps = (bus: DeviceBus = fakeDeviceBus().bus): AppDeps => ({ users: fakeUserStore(), devices: fakeDeviceStore(), bus, auth: fakeVerifier });
+export function fakeTelemetryStore(samples: Record<number, PowerSample[]> = {}): TelemetryStore {
+  return { recentPower: async (deviceId, since) => (samples[deviceId] ?? []).filter((s) => Date.parse(s.time) >= since.getTime()) };
+}
+
+export const fakeDeps = (bus: DeviceBus = fakeDeviceBus().bus, telemetry: TelemetryStore = fakeTelemetryStore()): AppDeps => ({
+  users: fakeUserStore(),
+  devices: fakeDeviceStore(),
+  bus,
+  telemetry,
+  auth: fakeVerifier,
+});

@@ -6,8 +6,10 @@ import { createApp } from "@chargelatch/api";
 import { createKeycloakVerifier } from "@chargelatch/api/auth";
 import { MqttDeviceBus } from "@chargelatch/api/device-bus";
 import { createDeviceStore } from "@chargelatch/api/devices";
+import { createTelemetryStore } from "@chargelatch/api/telemetry";
 import { createUserStore } from "@chargelatch/api/users";
-import { createDb } from "@chargelatch/db";
+import { createDb, schema } from "@chargelatch/db";
+import { eq } from "drizzle-orm";
 import { runMigrations } from "@chargelatch/db/migrate";
 import { startEmqx, type StartedEmqx } from "./helpers/emqx.ts";
 import { startFakeDevice, type FakeDevice } from "./helpers/fake-device.ts";
@@ -19,6 +21,7 @@ let keycloak: StartedKeycloak;
 let emqx: StartedEmqx;
 let bus: MqttDeviceBus;
 let closeDb: () => Promise<void>;
+let db: ReturnType<typeof createDb>["db"];
 let app: ReturnType<typeof createApp>;
 let factoryToken: string;
 
@@ -26,7 +29,8 @@ beforeAll(async () => {
   [postgres, keycloak, emqx] = await Promise.all([startPostgres(), startKeycloak(), startEmqx()]);
   await runMigrations(postgres.url());
 
-  const { db, close } = createDb(postgres.url());
+  const { db: database, close } = createDb(postgres.url());
+  db = database;
   closeDb = close;
   bus = new MqttDeviceBus({ url: emqx.mqttUrl, commandTimeoutMs: 1500 });
   await bus.ready();
@@ -34,6 +38,7 @@ beforeAll(async () => {
     users: createUserStore(db),
     devices: createDeviceStore(db),
     bus,
+    telemetry: createTelemetryStore(db),
     auth: createKeycloakVerifier(`${keycloak.baseUrl}/realms/${REALM}`, "chargelatch-api"),
   });
   factoryToken = await getAccessToken(keycloak.baseUrl, FIXTURE_USERS.factory);
@@ -215,6 +220,19 @@ describe("device control over mqtt", () => {
     expect(device.relayOn()).toBe(true);
     await app.request("/api/admin/devices/SONIK-1/relay", { method: "PUT", headers, body: JSON.stringify({ on: false }) });
     expect(device.relayOn()).toBe(false);
+  });
+
+  test("stored meter readings are served as power history", async () => {
+    const [registered] = await db.select().from(schema.devices).where(eq(schema.devices.identity, "SONIK-1"));
+    await db.insert(schema.meterReadings).values([
+      { time: new Date(Date.now() - 8 * 60_000), deviceId: registered!.id, model: "SDM120", ok: true, power: 1000 },
+      { time: new Date(Date.now() - 4 * 60_000), deviceId: registered!.id, model: "SDM120", ok: false, error: "timeout" },
+      { time: new Date(Date.now() - 1 * 60_000), deviceId: registered!.id, model: "SDM120", ok: true, power: 1430.5 },
+      { time: new Date(Date.now() - 30 * 60_000), deviceId: registered!.id, model: "SDM120", ok: true, power: 5 }, // outside 10 min
+    ]);
+    const res = await app.request("/api/admin/devices/SONIK-1/power", { headers: admin() });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { power: number | null }[]).map((s) => s.power)).toEqual([1000, null, 1430.5]);
   });
 
   test("a registered device that never connected times out with 504", async () => {

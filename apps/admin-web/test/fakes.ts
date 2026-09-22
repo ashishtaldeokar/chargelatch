@@ -1,5 +1,5 @@
 import type { DeviceMessageKind } from "@chargelatch/device-protocol";
-import type { Api, LiveDevice } from "../src/api.ts";
+import type { Api, LiveDevice, PowerSample } from "../src/api.ts";
 import type { LiveFeed } from "../src/live.ts";
 
 export const device = (overrides: Partial<LiveDevice> = {}): LiveDevice => ({
@@ -25,7 +25,7 @@ export const device = (overrides: Partial<LiveDevice> = {}): LiveDevice => ({
  * (what devices publish). `deviceSays` plays a device publishing. As in reality, a relay command
  * is confirmed by the device's own `relay` message on the feed, not by the HTTP response.
  */
-export function fakeBackend(initial: LiveDevice[], options: { failRelay?: string } = {}) {
+export function fakeBackend(initial: LiveDevice[], options: { failRelay?: string; power?: Record<string, PowerSample[]> } = {}) {
   let registry = initial;
   let onMessage: ((identity: string, kind: DeviceMessageKind, payload: unknown) => void) | undefined;
   let onConnection: ((connected: boolean) => void) | undefined;
@@ -45,6 +45,7 @@ export function fakeBackend(initial: LiveDevice[], options: { failRelay?: string
       deviceSays(identity, "relay", { on });
       return { on, updatedAt: new Date().toISOString() };
     },
+    recentPower: async (identity) => options.power?.[identity] ?? [],
   };
 
   const feed: LiveFeed = {

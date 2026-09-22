@@ -12,7 +12,8 @@ test("shows each device with its status, contactor state and meter readings", as
   const card = within(await screen.findByRole("article", { name: "SONIK-1" }));
   expect(card.getByText("online")).toBeInTheDocument();
   expect(card.getByTestId("relay-state")).toHaveTextContent("Open (off)");
-  expect(card.getByText("1,430 W")).toBeInTheDocument();
+  // The chart end-label repeats the latest power, so pin this to the readings list.
+  expect(card.getByText("1,430 W", { selector: "dd" })).toBeInTheDocument();
   expect(card.getByText("230.5 V")).toBeInTheDocument();
   expect(card.getByText("1,234.76 kWh")).toBeInTheDocument();
   expect(screen.getByText("Live")).toBeInTheDocument();
@@ -104,6 +105,19 @@ test("a device flashed while the page is open appears once it starts talking", a
   backend.deviceSays("SONIK-666", "status", { online: true });
   backend.deviceSays("SONIK-667", "status", { online: true });
   expect(backend.listCalls()).toBe(2);
+});
+
+test("the power chart is seeded from stored readings and grows with live ones", async () => {
+  const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+  const backend = fakeBackend([device({ meter: null })], { power: { "SONIK-1": [{ time: minutesAgo(8), power: 1000 }, { time: minutesAgo(4), power: 1200 }] } });
+  const { container } = show(backend);
+
+  const figure = await screen.findByRole("figure", { name: "Active power, last 10 minutes" });
+  expect(await within(figure).findByText("1,200 W")).toBeInTheDocument();
+  expect(container.querySelectorAll("path.line")).toHaveLength(1);
+
+  backend.deviceSays("SONIK-1", "meter", { model: "SDM120", phases: 1, ok: true, power: 7200 });
+  expect(await within(figure).findByText("7,200 W")).toBeInTheDocument();
 });
 
 test("an offline device cannot be switched", async () => {

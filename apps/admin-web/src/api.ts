@@ -9,11 +9,18 @@ export interface LiveDevice extends LiveDeviceState {
   firmwareVersion: string | null;
 }
 
+export interface PowerSample {
+  time: string;
+  power: number | null;
+}
+
 export interface Api {
   /** The device registry with the API's view of each device. Live changes come from live.ts. */
   listDevices(): Promise<LiveDevice[]>;
   /** Resolves once the DEVICE has confirmed; rejects with the reason (offline, no confirmation). */
   setRelay(identity: string, on: boolean): Promise<RelayState>;
+  /** Stored power samples for the last `minutes`, oldest first. */
+  recentPower(identity: string, minutes: number): Promise<PowerSample[]>;
 }
 
 export function createApi(getToken: () => string | undefined, fetcher: typeof fetch = fetch): Api {
@@ -39,5 +46,6 @@ export function createApi(getToken: () => string | undefined, fetcher: typeof fe
   return {
     listDevices: () => request<LiveDevice[]>("/api/admin/devices"),
     setRelay: (identity, on) => request<RelayState>(`/api/admin/devices/${identity}/relay`, { method: "PUT", body: JSON.stringify({ on }) }),
+    recentPower: (identity, minutes) => request<PowerSample[]>(`/api/admin/devices/${identity}/power?minutes=${minutes}`),
   };
 }

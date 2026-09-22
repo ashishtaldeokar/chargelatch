@@ -3,6 +3,7 @@ import { createApp } from "./app.ts";
 import { createKeycloakVerifier } from "./auth.ts";
 import { MqttDeviceBus } from "./device-bus.ts";
 import { createDeviceStore } from "./devices.ts";
+import { createTelemetryStore } from "./telemetry.ts";
 import { createUserStore } from "./users.ts";
 
 const { db, close: closeDb } = createDb(requireDatabaseUrl());
@@ -20,6 +21,7 @@ const app = createApp({
   users: createUserStore(db),
   devices: createDeviceStore(db),
   bus,
+  telemetry: createTelemetryStore(db),
   auth: createKeycloakVerifier(issuer, process.env.KEYCLOAK_AUDIENCE ?? "chargelatch-api"),
 });
 

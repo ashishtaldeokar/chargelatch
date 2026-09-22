@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 import type { TokenVerifier } from "./auth.ts";
 import type { DeviceBus } from "./device-bus.ts";
 import type { DeviceStore } from "./devices.ts";
+import type { TelemetryStore } from "./telemetry.ts";
 import { createAdminRoutes } from "./admin.ts";
 import { createFactoryRoutes } from "./factory.ts";
 import { defaultHook, json, openApiInfo } from "./openapi.ts";
@@ -18,6 +19,7 @@ export interface AppDeps {
   users: UserStore;
   devices: DeviceStore;
   bus: DeviceBus;
+  telemetry: TelemetryStore;
   auth: TokenVerifier;
 }
 
@@ -51,7 +53,7 @@ const createUserRoute = createRoute({
 
 const toUserDto = (user: User) => ({ ...user, createdAt: user.createdAt.toISOString() });
 
-export function createApp({ users, devices, bus, auth }: AppDeps) {
+export function createApp({ users, devices, bus, telemetry, auth }: AppDeps) {
   const app = new OpenAPIHono({ defaultHook });
 
   app.use(logger());
@@ -71,7 +73,7 @@ export function createApp({ users, devices, bus, auth }: AppDeps) {
     .openapi(listUsersRoute, async (c) => c.json((await users.list()).map(toUserDto), 200))
     .openapi(createUserRoute, async (c) => c.json(toUserDto(await users.create(c.req.valid("json"))), 201))
     .route("/", createFactoryRoutes(devices, auth))
-    .route("/", createAdminRoutes(devices, bus, auth));
+    .route("/", createAdminRoutes(devices, bus, telemetry, auth));
 }
 
 // For typed clients via `hc<AppType>()` from "hono/client".

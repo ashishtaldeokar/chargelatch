@@ -68,7 +68,7 @@ export function Dashboard({ api, feed }: { api: Api; feed: LiveFeed }) {
       {devices?.length === 0 && <p className="muted">No devices yet. Flash one with the factory app.</p>}
       <div className="devices">
         {devices?.map((device) => (
-          <DeviceCard key={device.identity} device={device} setRelay={(on) => api.setRelay(device.identity, on)} />
+          <DeviceCard key={device.identity} device={device} setRelay={(on) => api.setRelay(device.identity, on)} recentPower={api.recentPower} />
         ))}
       </div>
     </>

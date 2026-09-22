@@ -7,6 +7,7 @@ const app = createApp({
   users: { list: unused, create: unused },
   devices: { register: unused, get: unused, getByIdentity: unused, list: unused, markFlashed: unused },
   bus: { getState: () => { throw new Error("unused"); }, setRelay: unused },
+  telemetry: { recentPower: unused },
   auth: { verify: unused },
 });
 

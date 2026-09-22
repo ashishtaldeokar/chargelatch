@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import type { LiveDevice } from "./api.ts";
+import type { Api, LiveDevice } from "./api.ts";
 import { splitReadings } from "./meter.ts";
+import { PowerChart } from "./PowerChart.tsx";
+import { appendPoint, fromHistory, trim, WINDOW_MS, type PowerPoint } from "./power-series.ts";
 
 /** Readings arrive every 5 s; after this long without one the numbers are no longer "now". */
 const STALE_AFTER_MS = 20_000;
@@ -17,12 +19,34 @@ function useNow(intervalMs: number): number {
 interface DeviceCardProps {
   device: LiveDevice;
   setRelay: (on: boolean) => Promise<unknown>;
+  recentPower: Api["recentPower"];
 }
 
-export function DeviceCard({ device, setRelay }: DeviceCardProps) {
+export function DeviceCard({ device, setRelay, recentPower }: DeviceCardProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const now = useNow(5000);
+  const [power, setPower] = useState<PowerPoint[]>([]);
+
+  // Seed the chart from stored readings once; live meter messages extend it from there.
+  useEffect(() => {
+    let active = true;
+    recentPower(device.identity, WINDOW_MS / 60_000).then(
+      (samples) => active && setPower((live) => fromHistory(samples).concat(live.filter((p) => !samples.some((s) => Date.parse(s.time) >= p.time)))),
+      () => {},
+    );
+    return () => {
+      active = false;
+    };
+  }, [device.identity, recentPower]);
+
+  const meter = device.meter;
+  useEffect(() => {
+    if (!meter) return;
+    const time = Date.parse(meter.receivedAt);
+    setPower((points) => appendPoint(points, { time, power: meter.ok && typeof meter.values.power === "number" ? meter.values.power : null }, time));
+  }, [meter]);
+  const chartPoints = trim(power, now);
 
   const online = device.online === true;
   const relayOn = device.relay?.on ?? false;
@@ -42,7 +66,6 @@ export function DeviceCard({ device, setRelay }: DeviceCardProps) {
     }
   }
 
-  const meter = device.meter;
   const stale = meter ? now - Date.parse(meter.receivedAt) > STALE_AFTER_MS : false;
   const readings = meter ? splitReadings(meter.values) : null;
 
@@ -97,6 +120,7 @@ export function DeviceCard({ device, setRelay }: DeviceCardProps) {
             ))}
           </dl>
         )}
+        <PowerChart points={chartPoints} now={now} windowMs={WINDOW_MS} />
         {readings && readings.rest.length > 0 && (
           <details>
             <summary>All readings ({meter!.model})</summary>

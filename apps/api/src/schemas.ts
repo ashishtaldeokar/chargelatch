@@ -131,3 +131,20 @@ export const LiveDeviceSchema = z
   .openapi("LiveDevice");
 
 export const SetRelaySchema = z.object({ on: z.boolean().openapi({ description: "true closes the contactor" }) }).openapi("SetRelay");
+
+export const PowerSampleSchema = z
+  .object({
+    time: z.iso.datetime(),
+    power: z.number().nullable().openapi({ description: "Active power in W; null where the meter could not be read" }),
+  })
+  .openapi("PowerSample");
+
+export const PowerHistoryQuerySchema = z.object({
+  minutes: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60)
+    .default(10)
+    .openapi({ param: { name: "minutes", in: "query" }, example: 10, description: "How far back, at most 1440 (raw readings expire after 30 days)" }),
+});

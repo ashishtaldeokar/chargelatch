@@ -24,13 +24,16 @@ test("an admin sees live meter readings and switches the contactor", async ({ pa
 
   const card = page.getByRole("article", { name: "SONIK-1" });
   await expect(card.getByText("online", { exact: true })).toBeVisible();
-  await expect(card.getByText("1,430 W")).toBeVisible();
+  await expect(card.getByRole("definition").filter({ hasText: "1,430 W" })).toBeVisible();
   await expect(card.getByText("230.5 V")).toBeVisible();
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
 
-  // A new reading reaches the open page by itself.
+  // A new reading reaches the open page by itself, and extends the power chart.
   await device.publishMeter({ voltage: 229.8, current: 31.3, power: 7200, total_energy: 1234.9 });
-  await expect(card.getByText("7,200 W")).toBeVisible();
+  await expect(card.getByText("7,200 W", { exact: true }).first()).toBeVisible();
+  const chart = card.getByRole("figure", { name: "Active power, last 10 minutes" });
+  await expect(chart.locator("path.line, circle.point")).not.toHaveCount(0);
+  await expect(chart.getByText("7,200 W")).toBeVisible();
 
   // Switch on: the UI shows "closed" only once the device has confirmed.
   const contactor = card.getByRole("switch", { name: "SONIK-1 contactor" });

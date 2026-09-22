@@ -65,3 +65,22 @@ dl.primary dd { font-size: 1.35rem; font-weight: 600; }
 details { margin-top: 0.9rem; }
 summary { cursor: pointer; color: var(--muted); font-size: 0.875rem; }
 .updated { margin: 0.75rem 0 0; font-size: 0.75rem; }
+
+/* Power chart: one series, so the line is the only data color (validated: #2a78d6 on light, #3987e5 on dark). */
+:root { --series-1: #2a78d6; --grid: light-dark(#e6e8ec, #262b31); }
+@media (prefers-color-scheme: dark) { :root { --series-1: #3987e5; } }
+.power-chart { margin: 1rem 0 0; position: relative; }
+.power-chart figcaption { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.25rem; }
+.power-chart figcaption strong { font-family: var(--mono); font-size: 0.95rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.power-chart svg { display: block; width: 100%; height: auto; touch-action: none; }
+.power-chart .grid line { stroke: var(--grid); stroke-width: 1; }
+.power-chart text { fill: var(--muted); font-size: 9px; font-family: var(--mono); }
+.power-chart .empty { font-family: inherit; font-size: 11px; }
+.power-chart .line { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.power-chart .point { fill: var(--series-1); }
+.power-chart .end { fill: var(--series-1); stroke: var(--card); stroke-width: 2; }
+.power-chart .crosshair line { stroke: var(--muted); stroke-width: 1; }
+.power-chart .crosshair circle { fill: var(--series-1); stroke: var(--card); stroke-width: 2; }
+.power-chart .tooltip { position: absolute; top: 1.4rem; right: 0; display: flex; gap: 0.5rem; align-items: baseline; padding: 0.25rem 0.5rem; border-radius: 6px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 0.75rem; pointer-events: none; }
+.power-chart .tooltip strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.power-chart .tooltip span { color: var(--muted); }

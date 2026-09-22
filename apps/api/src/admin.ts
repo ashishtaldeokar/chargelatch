@@ -3,11 +3,14 @@ import type { Device } from "@chargelatch/db";
 import { requireRole, type AuthEnv, type TokenVerifier } from "./auth.ts";
 import { BusUnavailableError, DeviceOfflineError, DeviceTimeoutError, type DeviceBus, type LiveDeviceState } from "./device-bus.ts";
 import type { DeviceStore } from "./devices.ts";
+import type { TelemetryStore } from "./telemetry.ts";
 import { defaultHook, json } from "./openapi.ts";
 import {
   DeviceIdentityParamSchema,
   ErrorSchema,
   LiveDeviceSchema,
+  PowerHistoryQuerySchema,
+  PowerSampleSchema,
   ProvisioningInfoSchema,
   RelayStateSchema,
   SetRelaySchema,
@@ -31,7 +34,7 @@ const toLiveDevice = (device: Device, live: LiveDeviceState) => ({
   meter: live.meter,
 });
 
-export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, verifier: TokenVerifier) {
+export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, telemetry: TelemetryStore, verifier: TokenVerifier) {
   const provisioningRoute = createRoute({
     ...base,
     method: "get",
@@ -100,6 +103,16 @@ export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, verifier
     },
   });
 
+  const powerRoute = createRoute({
+    ...base,
+    method: "get",
+    path: "/api/admin/devices/{identity}/power",
+    summary: "Recent active power samples from the stored meter readings",
+    description: "Raw readings as ingested by the telemetry service (one every ~5 s), oldest first. Live continuation comes from the MQTT feed.",
+    request: { params: DeviceIdentityParamSchema, query: PowerHistoryQuerySchema },
+    responses: { 200: json(z.array(PowerSampleSchema), "Samples, oldest first"), 400: json(ErrorSchema, "Invalid request"), ...authErrors, ...notFound },
+  });
+
   const routes = new OpenAPIHono<AuthEnv>({ defaultHook });
   routes.use("/api/admin/*", requireRole(verifier, "admin"));
 
@@ -116,6 +129,12 @@ export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, verifier
       const device = await devices.getByIdentity(c.req.valid("param").identity);
       if (!device) return c.json({ error: "No such device" }, 404);
       return c.json(toLiveDevice(device, bus.getState(device.identity)), 200);
+    })
+    .openapi(powerRoute, async (c) => {
+      const device = await devices.getByIdentity(c.req.valid("param").identity);
+      if (!device) return c.json({ error: "No such device" }, 404);
+      const since = new Date(Date.now() - c.req.valid("query").minutes * 60_000);
+      return c.json(await telemetry.recentPower(device.id, since), 200);
     })
     .openapi(getRelayRoute, async (c) => {
       const device = await devices.getByIdentity(c.req.valid("param").identity);
