@@ -1,4 +1,6 @@
+import type { DeviceMessageKind } from "@chargelatch/device-protocol";
 import type { Api, LiveDevice } from "../src/api.ts";
+import type { LiveFeed } from "../src/live.ts";
 
 export const device = (overrides: Partial<LiveDevice> = {}): LiveDevice => ({
   identity: "SONIK-1",
@@ -19,38 +21,54 @@ export const device = (overrides: Partial<LiveDevice> = {}): LiveDevice => ({
 });
 
 /**
- * A fake API whose `push` plays the event stream. Like the real thing, a relay command is
- * confirmed by the device state arriving over the stream, not by the HTTP response alone.
+ * The two halves of the real system: an HTTP API (registry + relay commands) and an MQTT feed
+ * (what devices publish). `deviceSays` plays a device publishing. As in reality, a relay command
+ * is confirmed by the device's own `relay` message on the feed, not by the HTTP response.
  */
-export function fakeApi(initial: LiveDevice[], options: { failRelay?: string } = {}) {
-  let devices = initial;
-  let onDevice: ((device: LiveDevice) => void) | undefined;
+export function fakeBackend(initial: LiveDevice[], options: { failRelay?: string } = {}) {
+  let registry = initial;
+  let onMessage: ((identity: string, kind: DeviceMessageKind, payload: unknown) => void) | undefined;
   let onConnection: ((connected: boolean) => void) | undefined;
   const relayCalls: [string, boolean][] = [];
+  let listCalls = 0;
 
-  const push = (next: LiveDevice) => {
-    devices = devices.some((d) => d.identity === next.identity) ? devices.map((d) => (d.identity === next.identity ? next : d)) : [next, ...devices];
-    onDevice?.(next);
-  };
+  const deviceSays = (identity: string, kind: DeviceMessageKind, payload: unknown) => onMessage?.(identity, kind, payload);
 
   const api: Api = {
-    listDevices: async () => devices,
+    listDevices: async () => {
+      listCalls++;
+      return registry;
+    },
     setRelay: async (identity, on) => {
       relayCalls.push([identity, on]);
       if (options.failRelay) throw new Error(options.failRelay);
-      const relay = { on, updatedAt: new Date().toISOString() };
-      push({ ...devices.find((d) => d.identity === identity)!, relay });
-      return relay;
+      deviceSays(identity, "relay", { on });
+      return { on, updatedAt: new Date().toISOString() };
     },
-    watchDevices: (deviceListener, connectionListener) => {
-      onDevice = deviceListener;
+  };
+
+  const feed: LiveFeed = {
+    watch: (messageListener, connectionListener) => {
+      onMessage = messageListener;
       onConnection = connectionListener;
       connectionListener(true);
       return () => {
-        onDevice = undefined;
+        onMessage = undefined;
         onConnection = undefined;
       };
     },
   };
-  return { api, push, relayCalls, setConnected: (connected: boolean) => onConnection?.(connected), watching: () => onDevice !== undefined };
+
+  return {
+    api,
+    feed,
+    deviceSays,
+    relayCalls,
+    listCalls: () => listCalls,
+    register: (next: LiveDevice) => {
+      registry = [next, ...registry];
+    },
+    setConnected: (connected: boolean) => onConnection?.(connected),
+    watching: () => onMessage !== undefined,
+  };
 }

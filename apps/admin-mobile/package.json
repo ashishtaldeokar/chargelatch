@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "flutter run",
+    "start:hosted": "flutter run --dart-define=KEYCLOAK_URL=https://auth.ashishtaldeokar.in",
     "test:unit": "flutter test",
     "analyze": "flutter analyze",
     "format": "dart format lib test"

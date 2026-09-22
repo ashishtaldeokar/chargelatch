@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyMessage, type LiveDeviceState } from "./device-bus.ts";
+import { applyMessage, parseDeviceTopic, parsePayload, relayCommandTopic, type LiveDeviceState } from "./index.ts";
 
 const blank: LiveDeviceState = { identity: "SONIK-1", online: null, firmware: null, relay: null, meter: null };
 const now = new Date("2026-09-20T10:00:00.000Z");
@@ -35,5 +35,26 @@ describe("applying device messages", () => {
     expect(applyMessage(blank, "unknown", { on: true }, now)).toBeNull();
     // Non-numeric "values" are dropped rather than passed through to clients.
     expect(applyMessage(blank, "meter", { model: "SDM120", ok: true, voltage: "<script>" }, now)!.meter!.values).toEqual({});
+  });
+});
+
+describe("topics", () => {
+  test("state topics are parsed, everything else is ignored", () => {
+    expect(parseDeviceTopic("devices/SONIK-42/meter")).toEqual({ identity: "SONIK-42", kind: "meter" });
+    expect(parseDeviceTopic("devices/SONIK-42/status")).toEqual({ identity: "SONIK-42", kind: "status" });
+    // Commands and deeper or foreign topics are not device state.
+    expect(parseDeviceTopic("devices/SONIK-42/cmd/relay")).toBeNull();
+    expect(parseDeviceTopic("devices/SONIK-42/meter/extra")).toBeNull();
+    expect(parseDeviceTopic("other/SONIK-42/meter")).toBeNull();
+  });
+
+  test("the command topic", () => {
+    expect(relayCommandTopic("SONIK-42")).toBe("devices/SONIK-42/cmd/relay");
+  });
+
+  test("payloads that are not JSON do not throw", () => {
+    expect(parsePayload('{"on":true}')).toEqual({ on: true });
+    expect(parsePayload("on")).toBeUndefined();
+    expect(parsePayload("")).toBeUndefined();
   });
 });

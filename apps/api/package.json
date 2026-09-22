@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@chargelatch/db": "workspace:*",
+    "@chargelatch/device-protocol": "workspace:*",
     "@chargelatch/nvs-partition": "workspace:*",
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.6.3",

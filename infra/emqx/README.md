@@ -16,7 +16,8 @@ at a broker you control.
 ## What is baked in, and why
 
 - `authentication = []`, `authorization.no_match = allow`: anonymous, see above.
-- TCP `1883` and WebSocket `8083` listeners on; **TLS listeners (`8883`, `8084`) off**, because the
+- TCP `1883` and WebSocket `8083` listeners on (the admin-web portal reads live device data over
+  the WebSocket one, straight from the browser); **TLS listeners (`8883`, `8084`) off**, because the
   image only ships a public demo certificate.
 - `mqtt.max_packet_size = 64KB`: devices send small JSON; bigger packets get the client dropped.
 - `mqtt.session_expiry_interval = 2h`.

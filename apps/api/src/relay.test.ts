@@ -82,43 +82,4 @@ describe("live device state", () => {
     expect((await app.request("/api/admin/devices", { headers: as("user") })).status).toBe(403);
   });
 
-  test("streams state changes of registered devices as server-sent events", async () => {
-    const { app, deviceSays, listenerCount } = await setup();
-    const res = await app.request("/api/admin/devices/events", { headers: as("admin") });
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("text/event-stream");
-
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffered = "";
-    /** Next event carrying data, skipping comment-only blocks (": connected", keep-alives). */
-    const nextEvent = async () => {
-      for (;;) {
-        const end = buffered.indexOf("\n\n");
-        if (end === -1) {
-          buffered += decoder.decode((await reader.read()).value);
-          continue;
-        }
-        const block = buffered.slice(0, end);
-        buffered = buffered.slice(end + 2);
-        const data = block.split("\n").find((line) => line.startsWith("data: "));
-        if (data) return JSON.parse(data.slice(6));
-      }
-    };
-
-    // Give the handler a tick to subscribe before the device speaks.
-    while (listenerCount() === 0) await Bun.sleep(1);
-    deviceSays("SONIK-666", "relay", { on: true }); // unregistered: must not be forwarded
-    deviceSays("SONIK-1", "relay", { on: true });
-    expect(await nextEvent()).toMatchObject({ identity: "SONIK-1", relay: { on: true } });
-
-    await reader.cancel();
-    while (listenerCount() > 0) await Bun.sleep(1); // the subscription is released on disconnect
-  });
-
-  test("the event stream is admin only", async () => {
-    const { app } = await setup();
-    expect((await app.request("/api/admin/devices/events", { headers: as("factory") })).status).toBe(403);
-    expect((await app.request("/api/admin/devices/events")).status).toBe(401);
-  });
 });

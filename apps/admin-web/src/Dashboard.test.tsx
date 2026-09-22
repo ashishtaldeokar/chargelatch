@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { device, fakeApi } from "../test/fakes.ts";
+import { device, fakeBackend } from "../test/fakes.ts";
 import { Dashboard } from "./Dashboard.tsx";
 
+const show = (backend: ReturnType<typeof fakeBackend>) => render(<Dashboard api={backend.api} feed={backend.feed} />);
+
 test("shows each device with its status, contactor state and meter readings", async () => {
-  render(<Dashboard api={fakeApi([device()]).api} />);
+  show(fakeBackend([device()]));
 
   const card = within(await screen.findByRole("article", { name: "SONIK-1" }));
   expect(card.getByText("online")).toBeInTheDocument();
@@ -16,26 +18,36 @@ test("shows each device with its status, contactor state and meter readings", as
   expect(screen.getByText("Live")).toBeInTheDocument();
 });
 
-test("switching the contactor sends the command and follows the state the device reports", async () => {
-  const fake = fakeApi([device()]);
-  render(<Dashboard api={fake.api} />);
+test("switching the contactor sends the command over http and follows the state the device publishes", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
 
   const toggle = await screen.findByRole("switch", { name: "SONIK-1 contactor" });
   expect(toggle).toHaveAttribute("aria-checked", "false");
   await userEvent.click(toggle);
 
-  expect(fake.relayCalls).toEqual([["SONIK-1", true]]);
+  expect(backend.relayCalls).toEqual([["SONIK-1", true]]);
   expect(await screen.findByText("Closed (on)")).toBeInTheDocument();
   expect(toggle).toHaveAttribute("aria-checked", "true");
 
   await userEvent.click(toggle);
-  expect(fake.relayCalls).toEqual([["SONIK-1", true], ["SONIK-1", false]]);
+  expect(backend.relayCalls).toEqual([["SONIK-1", true], ["SONIK-1", false]]);
   expect(await screen.findByText("Open (off)")).toBeInTheDocument();
 });
 
+test("a contactor switched by someone else shows up too", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
+  await screen.findByText("Open (off)");
+
+  backend.deviceSays("SONIK-1", "relay", { on: true, id: "someone-elses-request" });
+  expect(await screen.findByText("Closed (on)")).toBeInTheDocument();
+  expect(backend.relayCalls).toEqual([]);
+});
+
 test("a command the device did not confirm leaves the switch where it was and says why", async () => {
-  const fake = fakeApi([device()], { failRelay: "SONIK-1 did not confirm the command in time" });
-  render(<Dashboard api={fake.api} />);
+  const backend = fakeBackend([device()], { failRelay: "SONIK-1 did not confirm the command in time" });
+  show(backend);
 
   const toggle = await screen.findByRole("switch", { name: "SONIK-1 contactor" });
   await userEvent.click(toggle);
@@ -45,53 +57,81 @@ test("a command the device did not confirm leaves the switch where it was and sa
   expect(toggle).toBeEnabled();
 });
 
+test("device messages update readings and online status without a reload", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
+  await screen.findByText("1,430 W");
+
+  backend.deviceSays("SONIK-1", "meter", { model: "SDM120", phases: 1, ok: true, voltage: 229.8, current: 31.3, power: 7200, total_energy: 1240 });
+  expect(await screen.findByText("7,200 W")).toBeInTheDocument();
+  expect(screen.getByText("229.8 V")).toBeInTheDocument();
+
+  // The broker publishes the last will when the device drops off.
+  backend.deviceSays("SONIK-1", "status", { online: false });
+  expect(await screen.findByText("offline")).toBeInTheDocument();
+  expect(screen.getByRole("switch", { name: "SONIK-1 contactor" })).toBeDisabled();
+});
+
+test("messages from identities that are not in the registry never create a device", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
+  await screen.findByRole("article", { name: "SONIK-1" });
+
+  // Anyone can publish on the anonymous broker.
+  backend.deviceSays("SONIK-666", "status", { online: true });
+  backend.deviceSays("SONIK-666", "relay", { on: true });
+  backend.deviceSays("SONIK-1", "relay", { on: "yes" }); // malformed: ignored by the shared reducer
+  backend.deviceSays("SONIK-1", "meter", undefined); // not JSON
+
+  await screen.findByText("Open (off)");
+  expect(screen.queryByRole("article", { name: "SONIK-666" })).not.toBeInTheDocument();
+});
+
+test("a device flashed while the page is open appears once it starts talking", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
+  await screen.findByRole("article", { name: "SONIK-1" });
+  expect(backend.listCalls()).toBe(1);
+
+  backend.register(device({ identity: "SONIK-2", online: null, relay: null, meter: null }));
+  backend.deviceSays("SONIK-2", "status", { online: true, firmware: "0.1.0" });
+
+  const second = within(await screen.findByRole("article", { name: "SONIK-2" }));
+  expect(second.getByText("No meter readings yet.")).toBeInTheDocument();
+  expect(backend.listCalls()).toBe(2);
+
+  // Unknown chatter cannot make the page hammer the API: the refetch is rate limited.
+  backend.deviceSays("SONIK-666", "status", { online: true });
+  backend.deviceSays("SONIK-667", "status", { online: true });
+  expect(backend.listCalls()).toBe(2);
+});
+
 test("an offline device cannot be switched", async () => {
-  render(<Dashboard api={fakeApi([device({ online: false })]).api} />);
+  show(fakeBackend([device({ online: false })]));
   expect(await screen.findByRole("switch", { name: "SONIK-1 contactor" })).toBeDisabled();
   expect(screen.getByText("offline")).toBeInTheDocument();
 });
 
-test("live updates change readings, status and contactor state without a reload", async () => {
-  const fake = fakeApi([device()]);
-  render(<Dashboard api={fake.api} />);
-  await screen.findByText("1,430 W");
-
-  const base = device();
-  fake.push({ ...base, relay: { on: true, updatedAt: new Date().toISOString() }, meter: { ...base.meter!, values: { ...base.meter!.values, power: 7200 } } });
-  expect(await screen.findByText("7,200 W")).toBeInTheDocument();
-  expect(screen.getByText("Closed (on)")).toBeInTheDocument();
-
-  // A device flashed while the page is open appears by itself.
-  fake.push(device({ identity: "SONIK-2", meter: null, relay: null }));
-  const second = within(await screen.findByRole("article", { name: "SONIK-2" }));
-  expect(second.getByText("No meter readings yet.")).toBeInTheDocument();
-  expect(second.getByTestId("relay-state")).toHaveTextContent("State unknown");
-});
-
 test("an unreadable meter is reported, and old readings are marked as not live", async () => {
   const old = new Date(Date.now() - 60_000).toISOString();
-  render(
-    <Dashboard
-      api={
-        fakeApi([
-          device({ identity: "SONIK-1", meter: { model: "SDM120", phases: 1, ok: false, error: "timeout", values: {}, receivedAt: new Date().toISOString() } }),
-          device({ identity: "SONIK-2", meter: { ...device().meter!, receivedAt: old } }),
-        ]).api
-      }
-    />,
+  show(
+    fakeBackend([
+      device({ identity: "SONIK-1", meter: { model: "SDM120", phases: 1, ok: false, error: "timeout", values: {}, receivedAt: new Date().toISOString() } }),
+      device({ identity: "SONIK-2", meter: { ...device().meter!, receivedAt: old } }),
+    ]),
   );
   expect(within(await screen.findByRole("article", { name: "SONIK-1" })).getByRole("alert")).toHaveTextContent("Meter not readable (timeout)");
   expect(within(screen.getByRole("article", { name: "SONIK-2" })).getByText(/no longer live/)).toBeInTheDocument();
 });
 
-test("says when live updates are down, and stops watching when unmounted", async () => {
-  const fake = fakeApi([device()]);
-  const { unmount } = render(<Dashboard api={fake.api} />);
+test("says when the broker connection is down, and disconnects when unmounted", async () => {
+  const backend = fakeBackend([device()]);
+  const { unmount } = show(backend);
   await screen.findByText("Live");
 
-  fake.setConnected(false);
-  expect(await screen.findByText("Reconnecting…")).toBeInTheDocument();
+  backend.setConnected(false);
+  expect(await screen.findByText("Connecting…")).toBeInTheDocument();
 
   unmount();
-  expect(fake.watching()).toBe(false);
+  expect(backend.watching()).toBe(false);
 });

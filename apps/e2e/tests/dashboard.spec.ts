@@ -3,8 +3,9 @@ import { startFakeDevice, type FakeDevice } from "../src/helpers/fake-device.ts"
 import { expect, test } from "./fixtures.ts";
 import { signIn } from "./helpers.ts";
 
-// The whole chain for real: browser -> admin-web -> API (Keycloak token) -> EMQX -> device, and
-// back through the event stream. Only the device is simulated (src/helpers/fake-device.ts).
+// The whole chain for real. Commands: browser -> API (Keycloak token) -> EMQX -> device. Live data:
+// device -> EMQX -> browser, over MQTT-over-WebSocket. Only the device is simulated
+// (src/helpers/fake-device.ts).
 
 const adminUrl = "http://localhost:5273";
 let device: FakeDevice | undefined;

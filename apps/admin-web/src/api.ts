@@ -1,73 +1,38 @@
-import { readEventStream } from "./sse.ts";
+import type { LiveDeviceState, RelayState } from "@chargelatch/device-protocol";
 
-export interface MeterReading {
-  model: string;
-  phases: number;
-  ok: boolean;
-  error?: string;
-  values: Record<string, number>;
-  receivedAt: string;
-}
+export type { MeterReading } from "@chargelatch/device-protocol";
 
-export interface LiveDevice {
-  identity: string;
+/** A registered device plus its live state. */
+export interface LiveDevice extends LiveDeviceState {
   macAddress: string;
   chipType: string;
   firmwareVersion: string | null;
-  /** null: not heard from since the API connected to the broker. */
-  online: boolean | null;
-  firmware: string | null;
-  relay: { on: boolean; updatedAt: string } | null;
-  meter: MeterReading | null;
 }
 
 export interface Api {
+  /** The device registry with the API's view of each device. Live changes come from live.ts. */
   listDevices(): Promise<LiveDevice[]>;
-  setRelay(identity: string, on: boolean): Promise<{ on: boolean; updatedAt: string }>;
-  /**
-   * Live updates. Reconnects by itself; `onConnection(false)` means the list may be stale, and
-   * `onConnection(true)` is the cue to refetch it. Returns a function that stops everything.
-   */
-  watchDevices(onDevice: (device: LiveDevice) => void, onConnection: (connected: boolean) => void): () => void;
+  /** Resolves once the DEVICE has confirmed; rejects with the reason (offline, no confirmation). */
+  setRelay(identity: string, on: boolean): Promise<RelayState>;
 }
 
 export function createApi(getToken: () => string | undefined, fetcher: typeof fetch = fetch): Api {
-  const authorized = (init: RequestInit = {}): RequestInit => {
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = getToken();
     if (!token) throw new Error("Not signed in");
-    return { ...init, headers: { ...init.headers, authorization: `Bearer ${token}`, ...(init.body ? { "content-type": "application/json" } : {}) } };
-  };
-
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await fetcher(path, authorized(init));
+    const res = await fetcher(path, {
+      ...init,
+      headers: { ...init.headers, authorization: `Bearer ${token}`, ...(init.body ? { "content-type": "application/json" } : {}) },
+    });
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(body?.error ?? `${init?.method ?? "GET"} ${path} failed: ${res.status}`);
+      throw new Error(body?.error ?? `${init.method ?? "GET"} ${path} failed: ${res.status}`);
     }
     return res.json() as Promise<T>;
   }
 
   return {
     listDevices: () => request<LiveDevice[]>("/api/admin/devices"),
-    setRelay: (identity, on) => request(`/api/admin/devices/${identity}/relay`, { method: "PUT", body: JSON.stringify({ on }) }),
-    watchDevices: (onDevice, onConnection) => {
-      const controller = new AbortController();
-      void (async () => {
-        while (!controller.signal.aborted) {
-          try {
-            // authorized() is evaluated per attempt, so a silently renewed token is picked up.
-            const res = await fetcher("/api/admin/devices/events", { ...authorized(), signal: controller.signal });
-            onConnection(true);
-            await readEventStream(res, (event) => event.event === "device" && onDevice(JSON.parse(event.data) as LiveDevice), controller.signal);
-          } catch {
-            // fall through to the retry below
-          }
-          if (controller.signal.aborted) return;
-          onConnection(false);
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-        }
-      })();
-      return () => controller.abort();
-    },
+    setRelay: (identity, on) => request<RelayState>(`/api/admin/devices/${identity}/relay`, { method: "PUT", body: JSON.stringify({ on }) }),
   };
 }

@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-if (!process.env.DATABASE_URL || !process.env.KEYCLOAK_URL || !process.env.KEYCLOAK_ISSUER || !process.env.MQTT_URL) {
+if (!process.env.DATABASE_URL || !process.env.KEYCLOAK_URL || !process.env.KEYCLOAK_ISSUER || !process.env.MQTT_URL || !process.env.MQTT_WS_URL) {
   throw new Error("DATABASE_URL / KEYCLOAK_URL are not set. Run the suite with `pnpm test:e2e:browser` so containers are started first.");
 }
 
@@ -33,7 +33,7 @@ export default defineConfig({
     {
       command: `pnpm --filter @chargelatch/admin-web exec vite --port ${webPort} --strictPort`,
       url: `http://localhost:${webPort}`,
-      env: { API_URL: `http://localhost:${apiPort}`, VITE_KEYCLOAK_URL: process.env.KEYCLOAK_URL },
+      env: { API_URL: `http://localhost:${apiPort}`, VITE_KEYCLOAK_URL: process.env.KEYCLOAK_URL, VITE_MQTT_WS_URL: process.env.MQTT_WS_URL },
       reuseExistingServer: false,
     },
     {

@@ -3,11 +3,13 @@ import { useAuth } from "react-oidc-context";
 import { createApi } from "./api.ts";
 import { ADMIN_ROLE, realmRoles } from "./auth.ts";
 import { Dashboard } from "./Dashboard.tsx";
+import { createMqttFeed } from "./live.ts";
 
 export function App() {
   const auth = useAuth();
   // The api reads the token lazily so a silently renewed token is picked up mid-session.
   const api = useMemo(() => createApi(() => auth.user?.access_token), [auth.user]);
+  const feed = useMemo(() => createMqttFeed(), []);
 
   let body;
   if (auth.isLoading) {
@@ -38,7 +40,7 @@ export function App() {
       </section>
     );
   } else {
-    body = <Dashboard api={api} />;
+    body = <Dashboard api={api} feed={feed} />;
   }
 
   return (

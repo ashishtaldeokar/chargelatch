@@ -1,6 +1,5 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Device } from "@chargelatch/db";
-import { streamSSE } from "hono/streaming";
 import { requireRole, type AuthEnv, type TokenVerifier } from "./auth.ts";
 import { BusUnavailableError, DeviceOfflineError, DeviceTimeoutError, type DeviceBus, type LiveDeviceState } from "./device-bus.ts";
 import type { DeviceStore } from "./devices.ts";
@@ -103,56 +102,6 @@ export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, verifier
 
   const routes = new OpenAPIHono<AuthEnv>({ defaultHook });
   routes.use("/api/admin/*", requireRole(verifier, "admin"));
-
-  // Server-sent events: one `device` event per state change of any registered device. Consumed
-  // with fetch() rather than EventSource, because EventSource cannot send the bearer token.
-  routes.get("/api/admin/devices/events", (c) =>
-    streamSSE(c, async (stream) => {
-      const registered = new Map((await devices.list(200)).map((device) => [device.identity, device]));
-      const queue: LiveDeviceState[] = [];
-      let wake: (() => void) | undefined;
-      const unsubscribe = bus.subscribe((state) => {
-        queue.push(state);
-        wake?.();
-      });
-      stream.onAbort(() => {
-        unsubscribe();
-        wake?.();
-      });
-
-      try {
-        // Flushes the response headers right away. Without it a client (and any proxy in between)
-        // sees nothing until the first device event, and cannot tell "connected" from "hanging".
-        await stream.write(": connected\n\n");
-        while (!stream.aborted) {
-          const state = queue.shift();
-          if (!state) {
-            // Idle: wait for the next change, or send a comment every 20 s so proxies keep the stream open.
-            const timedOut = await new Promise<boolean>((resolve) => {
-              const timer = setTimeout(() => resolve(true), 20_000);
-              wake = () => {
-                clearTimeout(timer);
-                resolve(false);
-              };
-            });
-            wake = undefined;
-            if (timedOut && !stream.aborted) await stream.write(": keep-alive\n\n");
-            continue;
-          }
-          // The broker is anonymous: only forward devices that exist in the registry. Devices
-          // registered after this stream opened are looked up once.
-          let device = registered.get(state.identity);
-          if (!device) {
-            device = await devices.getByIdentity(state.identity);
-            if (device) registered.set(device.identity, device);
-          }
-          if (device) await stream.writeSSE({ event: "device", data: JSON.stringify(toLiveDevice(device, state)) });
-        }
-      } finally {
-        unsubscribe();
-      }
-    }),
-  );
 
   return routes
     .openapi(provisioningRoute, async (c) => {

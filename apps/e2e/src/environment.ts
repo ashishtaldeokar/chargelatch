@@ -27,6 +27,8 @@ export async function startEnvironment(): Promise<Environment> {
       KEYCLOAK_URL: keycloak.baseUrl,
       KEYCLOAK_ISSUER: `${keycloak.baseUrl}/realms/${REALM}`,
       MQTT_URL: emqx.mqttUrl,
+      // What the admin-web portal connects to from the browser.
+      MQTT_WS_URL: emqx.wsUrl,
     },
     stop: async () => {
       await Promise.all([postgres.stop(), keycloak.stop(), emqx.stop()]);

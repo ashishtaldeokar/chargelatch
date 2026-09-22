@@ -221,6 +221,12 @@ importers:
 
   apps/admin-web:
     dependencies:
+      '@chargelatch/device-protocol':
+        specifier: workspace:*
+        version: link:../../packages/device-protocol
+      mqtt:
+        specifier: ^5.16.0
+        version: 5.16.0
       oidc-client-ts:
         specifier: ^3.5.0
         version: 3.5.0
@@ -267,6 +273,9 @@ importers:
       '@chargelatch/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@chargelatch/device-protocol':
+        specifier: workspace:*
+        version: link:../../packages/device-protocol
       '@chargelatch/nvs-partition':
         specifier: workspace:*
         version: link:../../packages/nvs-partition
@@ -379,6 +388,8 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  packages/device-protocol: {}
 
   packages/nvs-partition: {}
 

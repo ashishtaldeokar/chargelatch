@@ -5,7 +5,7 @@ import { MqttDeviceBus } from "./device-bus.ts";
 import { createDeviceStore } from "./devices.ts";
 import { createUserStore } from "./users.ts";
 
-const { db } = createDb(requireDatabaseUrl());
+const { db, close: closeDb } = createDb(requireDatabaseUrl());
 
 const issuer = process.env.KEYCLOAK_ISSUER;
 if (!issuer) throw new Error("KEYCLOAK_ISSUER is not set");
@@ -13,16 +13,30 @@ if (!issuer) throw new Error("KEYCLOAK_ISSUER is not set");
 const mqttUrl = process.env.MQTT_URL;
 if (!mqttUrl) throw new Error("MQTT_URL is not set");
 
+// Connects in the background and keeps retrying; relay commands answer 503 until it is up.
+const bus = new MqttDeviceBus({ url: mqttUrl });
+
 const app = createApp({
   users: createUserStore(db),
   devices: createDeviceStore(db),
-  // Connects in the background and keeps retrying; relay commands answer 503 until it is up.
-  bus: new MqttDeviceBus({ url: mqttUrl }),
+  bus,
   auth: createKeycloakVerifier(issuer, process.env.KEYCLOAK_AUDIENCE ?? "chargelatch-api"),
 });
 
-const port = Number(process.env.PORT ?? 3000);
-console.log(`api listening on http://localhost:${port}`);
+const server = Bun.serve({ port: Number(process.env.PORT ?? 3000), fetch: app.fetch });
+console.log(`api listening on ${server.url}`);
 
-// idleTimeout 0: the device event stream is a long-lived response (Bun closes idle ones after 10 s).
-export default { port, fetch: app.fetch, idleTimeout: 0 };
+// Graceful shutdown for `pm2 reload` / SIGTERM: stop accepting connections, let requests that are
+// in flight finish (a relay command waits up to 5 s for its device), then release the broker and
+// the database. PM2 sends SIGINT and force-kills after `kill_timeout` (ecosystem.config.cjs).
+let stopping = false;
+async function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal} received, shutting down`);
+  await server.stop();
+  await Promise.allSettled([bus.close(), closeDb()]);
+  process.exit(0);
+}
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

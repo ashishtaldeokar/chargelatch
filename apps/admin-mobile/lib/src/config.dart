@@ -5,8 +5,8 @@
 /// so these URLs reach your machine (and so the token issuer matches what the API expects).
 class AppConfig {
   const AppConfig({
-    this.apiUrl = const String.fromEnvironment('API_URL', defaultValue: 'http://localhost:3000'),
-    this.keycloakUrl = const String.fromEnvironment('KEYCLOAK_URL', defaultValue: 'http://localhost:8080'),
+    this.apiUrl = const String.fromEnvironment('API_URL', defaultValue: 'https://sonik-api.ashishtaldeokar.in'),
+    this.keycloakUrl = const String.fromEnvironment('KEYCLOAK_URL', defaultValue: 'https://auth.ashishtaldeokar.in'),
     this.keycloakRealm = const String.fromEnvironment('KEYCLOAK_REALM', defaultValue: 'chargelatch'),
     this.clientId = const String.fromEnvironment('KEYCLOAK_CLIENT_ID', defaultValue: 'chargelatch-admin-mobile'),
   });

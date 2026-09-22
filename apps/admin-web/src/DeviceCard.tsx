@@ -32,8 +32,8 @@ export function DeviceCard({ device, setRelay }: DeviceCardProps) {
     setPending(true);
     setError(null);
     try {
-      // The switch does not move optimistically: it follows what the device reports back
-      // (through the event stream), because this is a contactor, not a checkbox.
+      // The switch does not move optimistically: it follows the state the device itself publishes
+      // (devices/<id>/relay, over MQTT), because this is a contactor, not a checkbox.
       await setRelay(!relayOn);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

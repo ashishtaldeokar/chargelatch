@@ -1,0 +1,13 @@
+{
+  "name": "@chargelatch/device-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test:unit": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}

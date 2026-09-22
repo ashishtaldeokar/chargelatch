@@ -6,7 +6,7 @@ const unused = () => Promise.reject(new Error("not available while generating th
 const app = createApp({
   users: { list: unused, create: unused },
   devices: { register: unused, get: unused, getByIdentity: unused, list: unused, markFlashed: unused },
-  bus: { getState: () => { throw new Error("unused"); }, setRelay: unused, subscribe: () => () => {} },
+  bus: { getState: () => { throw new Error("unused"); }, setRelay: unused },
   auth: { verify: unused },
 });
 

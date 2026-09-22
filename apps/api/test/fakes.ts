@@ -1,7 +1,8 @@
 import type { Device, User } from "@chargelatch/db";
 import type { AppDeps } from "../src/app.ts";
 import type { TokenVerifier } from "../src/auth.ts";
-import { applyMessage, DeviceOfflineError, DeviceTimeoutError, type DeviceBus, type LiveDeviceState } from "../src/device-bus.ts";
+import { applyMessage, emptyDeviceState, type LiveDeviceState } from "@chargelatch/device-protocol";
+import { DeviceOfflineError, DeviceTimeoutError, type DeviceBus } from "../src/device-bus.ts";
 import type { DeviceStore } from "../src/devices.ts";
 import type { UserStore } from "../src/users.ts";
 
@@ -68,23 +69,17 @@ export const fakeVerifier: TokenVerifier = {
  */
 export function fakeDeviceBus() {
   const states = new Map<string, LiveDeviceState>();
-  const listeners = new Set<(state: LiveDeviceState) => void>();
   const unresponsive = new Set<string>();
-  const get = (identity: string): LiveDeviceState => states.get(identity) ?? { identity, online: null, firmware: null, relay: null, meter: null };
+  const get = (identity: string): LiveDeviceState => states.get(identity) ?? emptyDeviceState(identity);
 
   const deviceSays = (identity: string, kind: "status" | "relay" | "meter", payload: object) => {
     const next = applyMessage(get(identity), kind, payload, new Date());
     if (!next) throw new Error("fake device sent an unusable message");
     states.set(identity, next);
-    for (const listener of listeners) listener(next);
   };
 
   const bus: DeviceBus = {
     getState: get,
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
     setRelay: async (identity, on) => {
       if (get(identity).online === false) throw new DeviceOfflineError(identity);
       if (unresponsive.has(identity)) throw new DeviceTimeoutError(identity);
@@ -92,7 +87,7 @@ export function fakeDeviceBus() {
       return get(identity).relay!;
     },
   };
-  return { bus, deviceSays, unresponsive, listenerCount: () => listeners.size };
+  return { bus, deviceSays, unresponsive };
 }
 
 export const fakeDeps = (bus: DeviceBus = fakeDeviceBus().bus): AppDeps => ({ users: fakeUserStore(), devices: fakeDeviceStore(), bus, auth: fakeVerifier });
