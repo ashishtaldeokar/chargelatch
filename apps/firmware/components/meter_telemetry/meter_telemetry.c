@@ -48,9 +48,9 @@ static void telemetry_task(void *arg)
     }
 }
 
-esp_err_t meter_telemetry_start(void)
+esp_err_t meter_telemetry_start(const sdm_meter_config_t *meter)
 {
-    ESP_RETURN_ON_ERROR(sdm_meter_init(), TAG, "sdm_meter_init failed");
+    ESP_RETURN_ON_ERROR(sdm_meter_init(meter), TAG, "sdm_meter_init failed");
     /* The JSON and reading buffers are static, so the stack only carries printf and the driver. */
     const BaseType_t created = xTaskCreate(telemetry_task, "meter_telemetry", 4096, NULL, 5, NULL);
     return created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;

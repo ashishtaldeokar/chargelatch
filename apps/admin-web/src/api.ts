@@ -7,6 +7,8 @@ export interface LiveDevice extends LiveDeviceState {
   macAddress: string;
   chipType: string;
   firmwareVersion: string | null;
+  /** The energy meter chosen at the factory; null on units flashed before meter selection existed. */
+  meterConfig: { model: string; address: number; baud: number; parity: string } | null;
 }
 
 export interface PowerSample {

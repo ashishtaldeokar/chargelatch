@@ -7,6 +7,7 @@ export const device = (overrides: Partial<LiveDevice> = {}): LiveDevice => ({
   macAddress: "24:6f:28:aa:bb:cc",
   chipType: "ESP32-D0WD-V3",
   firmwareVersion: "0.1.0",
+  meterConfig: { model: "SDM120", address: 1, baud: 2400, parity: "none" },
   online: true,
   firmware: "0.1.0",
   relay: { on: false, updatedAt: new Date().toISOString() },

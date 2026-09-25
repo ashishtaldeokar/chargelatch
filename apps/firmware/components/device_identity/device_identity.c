@@ -13,6 +13,9 @@ static char s_identity[DEVICE_IDENTITY_MAX_LEN];
 static char s_pop[DEVICE_IDENTITY_POP_MAX_LEN];
 static bool s_loaded;
 static bool s_has_pop;
+static char s_meter_model[16];
+static char s_meter_parity[8];
+static device_meter_config_t s_meter;
 
 esp_err_t device_identity_init(void)
 {
@@ -44,6 +47,20 @@ esp_err_t device_identity_init(void)
     /* Optional: partitions flashed before PoPs existed only hold the identity. */
     size_t pop_len = sizeof(s_pop);
     s_has_pop = (err == ESP_OK) && nvs_get_str(handle, DEVICE_IDENTITY_POP_KEY, s_pop, &pop_len) == ESP_OK;
+
+    /* Optional meter configuration. */
+    if (err == ESP_OK) {
+        size_t len = sizeof(s_meter_model);
+        if (nvs_get_str(handle, DEVICE_IDENTITY_METER_MODEL_KEY, s_meter_model, &len) == ESP_OK) {
+            s_meter.model = s_meter_model;
+        }
+        nvs_get_u8(handle, DEVICE_IDENTITY_METER_ADDR_KEY, &s_meter.address);
+        nvs_get_u32(handle, DEVICE_IDENTITY_METER_BAUD_KEY, &s_meter.baud);
+        len = sizeof(s_meter_parity);
+        if (nvs_get_str(handle, DEVICE_IDENTITY_METER_PARITY_KEY, s_meter_parity, &len) == ESP_OK) {
+            s_meter.parity = s_meter_parity;
+        }
+    }
     nvs_close(handle);
     if (err == ESP_ERR_NVS_NOT_FOUND) {
         ESP_LOGW(TAG, "factory partition has no \"%s\" key", DEVICE_IDENTITY_KEY);
@@ -52,13 +69,19 @@ esp_err_t device_identity_init(void)
     ESP_RETURN_ON_ERROR(err, TAG, "reading identity failed");
 
     s_loaded = true;
-    ESP_LOGI(TAG, "device identity: %s (provisioning PoP %s)", s_identity, s_has_pop ? "present" : "MISSING");
+    ESP_LOGI(TAG, "device identity: %s (provisioning PoP %s, meter %s)", s_identity, s_has_pop ? "present" : "MISSING",
+             s_meter.model ? s_meter.model : "not configured");
     return ESP_OK;
 }
 
 const char *device_identity_get(void)
 {
     return s_loaded ? s_identity : NULL;
+}
+
+const device_meter_config_t *device_identity_get_meter(void)
+{
+    return &s_meter;
 }
 
 const char *device_identity_get_pop(void)

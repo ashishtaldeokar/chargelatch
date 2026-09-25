@@ -102,6 +102,30 @@ menu "chargelatch Wi-Fi provisioning"
         help
             This enables BLE 4.2 features for Bluedroid.
 
+    config PROVISIONING_FALLBACK
+        bool "Re-open provisioning while the stored network is unreachable"
+        default y
+        depends on PROVISIONING_PROV_TRANSPORT_BLE
+        help
+            After a provisioned device has failed to (re)connect to its stored network for
+            RECONNECT_MINUTES, provisioning is opened again over BLE for WINDOW_MINUTES so the
+            admin app can hand it new credentials. If none arrive, the stored credentials are
+            restored and tried again for RECONNECT_MINUTES, and so on. While a BLE client is
+            connected the window is extended. Keeps the Bluetooth stack resident (~50 KB RAM)
+            instead of releasing it after the first provisioning.
+
+    config PROVISIONING_FALLBACK_RECONNECT_MINUTES
+        int "Minutes to try the stored network before re-opening provisioning"
+        depends on PROVISIONING_FALLBACK
+        default 5
+        range 1 1440
+
+    config PROVISIONING_FALLBACK_WINDOW_MINUTES
+        int "Minutes provisioning stays open before retrying the stored network"
+        depends on PROVISIONING_FALLBACK
+        default 5
+        range 1 1440
+
     config PROVISIONING_REPROVISIONING
         bool "Re-provisioning"
         help

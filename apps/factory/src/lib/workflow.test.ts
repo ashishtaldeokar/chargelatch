@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import { chip, fakeApi, fakeConnection, firmware } from "../../test/fakes.ts";
 import { provisionDevice, type Step } from "./workflow.ts";
 
-function run(overrides: { eraseAll?: boolean; connection?: ReturnType<typeof fakeConnection>; api?: ReturnType<typeof fakeApi> } = {}) {
+const sdm120 = { model: "SDM120", address: 1, baud: 2400, parity: "none" as const };
+
+function run(overrides: { eraseAll?: boolean; meter?: typeof sdm120; connection?: ReturnType<typeof fakeConnection>; api?: ReturnType<typeof fakeApi> } = {}) {
   const connection = overrides.connection ?? fakeConnection();
   const api = overrides.api ?? fakeApi();
   const steps: Step[] = [];
@@ -11,6 +13,7 @@ function run(overrides: { eraseAll?: boolean; connection?: ReturnType<typeof fak
     api: api.api,
     firmware,
     eraseAll: overrides.eraseAll ?? true,
+    meter: overrides.meter ?? sdm120,
     events: { onStep: (s) => steps.push(s), onRegistered: () => {}, onFlashProgress: () => {} },
   });
   return { result, steps, connection, api };
@@ -22,7 +25,7 @@ test("registers, flashes firmware plus the identity partition, records, resets",
 
   expect(device).toMatchObject({ identity: "SONIK-1", firmwareVersion: "0.1.0", flashCount: 1 });
   expect(steps).toEqual(["register", "identity", "erase", "flash", "record", "reset"]);
-  expect(api.calls).toEqual(["register", "partition:24576", "flashed:0.1.0"]);
+  expect(api.calls).toEqual(["register:SDM120", "partition:24576", "flashed:0.1.0"]);
   expect(connection.calls).toEqual(["erase", "write", "reset"]);
 
   // The identity image goes to the fctry offset from the partition table, after the firmware.
@@ -68,6 +71,17 @@ test("a chip whose flash size could not be detected is not blocked", async () =>
   expect((await result).identity).toBe("SONIK-1");
 });
 
+test("the chosen meter is registered with the device, and must be one the firmware knows", async () => {
+  const { result, api } = run({ meter: { model: "SDM630", address: 2, baud: 9600, parity: "none" } });
+  await result;
+  expect(api.calls[0]).toBe("register:SDM630");
+
+  const bad = run({ meter: { model: "XYZ999", address: 1, baud: 2400, parity: "none" } });
+  expect(bad.result).rejects.toThrow(/does not support the XYZ999 meter \(it knows: SDM120, SDM630\)/);
+  await bad.result.catch(() => {});
+  expect(bad.api.calls).toEqual([]);
+});
+
 test("a failed flash is never recorded as flashed", async () => {
   const connection = fakeConnection();
   connection.connection.writeFlash = async () => {
@@ -76,5 +90,5 @@ test("a failed flash is never recorded as flashed", async () => {
   const { result, api } = run({ connection });
   expect(result).rejects.toThrow(/MD5/);
   await result.catch(() => {});
-  expect(api.calls).toEqual(["register", "partition:24576"]);
+  expect(api.calls).toEqual(["register:SDM120", "partition:24576"]);
 });

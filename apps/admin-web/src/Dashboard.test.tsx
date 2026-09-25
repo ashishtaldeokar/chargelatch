@@ -11,6 +11,7 @@ test("shows each device with its status, contactor state and meter readings", as
 
   const card = within(await screen.findByRole("article", { name: "SONIK-1" }));
   expect(card.getByText("online")).toBeInTheDocument();
+  expect(card.getByText(/SDM120 @1/)).toBeInTheDocument();
   expect(card.getByTestId("relay-state")).toHaveTextContent("Open (off)");
   // The chart end-label repeats the latest power, so pin this to the readings list.
   expect(card.getByText("1,430 W", { selector: "dd" })).toBeInTheDocument();

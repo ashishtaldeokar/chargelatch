@@ -73,6 +73,13 @@ typedef struct {
 extern const sdm_model_t SDM_MODEL_SDM120;
 extern const sdm_model_t SDM_MODEL_SDM630;
 
+/** Every supported model; meters.json at the project root must list the same names. */
+extern const sdm_model_t *const SDM_MODELS[];
+extern const size_t SDM_MODEL_COUNT;
+
+/** Looks a model up by name ("SDM120"), or NULL. */
+const sdm_model_t *sdm_model_by_name(const char *name);
+
 /** Largest register_count of any model, for sizing buffers. */
 #define SDM_MAX_REGISTERS 32
 

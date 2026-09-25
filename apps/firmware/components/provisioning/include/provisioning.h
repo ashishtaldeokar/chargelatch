@@ -4,6 +4,11 @@
  * Wraps the ESP-IDF Wi-Fi provisioning manager: if the device has no stored Wi-Fi
  * credentials it starts the provisioning service (BLE or SoftAP, see menuconfig ->
  * Component config -> chargelatch Wi-Fi provisioning), otherwise it connects as a station.
+ *
+ * Fallback (CONFIG_PROVISIONING_FALLBACK): a provisioned device that cannot reach its network
+ * for N minutes re-opens BLE provisioning for N minutes, then goes back to the stored
+ * credentials, alternating until one of them works. The stored credentials are only replaced
+ * when new ones actually connect.
  */
 #pragma once
 

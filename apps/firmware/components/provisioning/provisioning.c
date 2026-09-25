@@ -15,6 +15,7 @@
 #include <esp_wifi.h>
 #include <esp_event.h>
 #include <esp_netif.h>
+#include <esp_timer.h>
 #include <nvs_flash.h>
 
 #include <wifi_provisioning/manager.h>
@@ -38,7 +39,61 @@ static const char *TAG = "provisioning";
 #define POP_MAX_LEN             65
 
 static EventGroupHandle_t s_wifi_event_group;
+static wifi_prov_mgr_config_t s_mgr_config;
 static char s_service_name[SERVICE_NAME_MAX_LEN];
+
+#if CONFIG_PROVISIONING_FALLBACK
+/* Supervisor task events */
+#define EV_RECONNECT_TIMEOUT    BIT0    /* stored network unreachable for RECONNECT_MINUTES */
+#define EV_WINDOW_TIMEOUT       BIT1    /* provisioning window open for WINDOW_MINUTES */
+#define EV_PROV_DONE            BIT2    /* the manager finished (new credentials connected) */
+#define RECONNECT_TIMEOUT_US    ((uint64_t)CONFIG_PROVISIONING_FALLBACK_RECONNECT_MINUTES * 60 * 1000000ULL)
+#define WINDOW_TIMEOUT_US       ((uint64_t)CONFIG_PROVISIONING_FALLBACK_WINDOW_MINUTES * 60 * 1000000ULL)
+
+static EventGroupHandle_t s_supervisor_events;
+static esp_timer_handle_t s_reconnect_timer;
+static esp_timer_handle_t s_window_timer;
+/* The config given to provisioning_start(), copied so the window can be re-opened later. */
+static char s_cfg_service_name[SERVICE_NAME_MAX_LEN];
+static char s_cfg_pop[POP_MAX_LEN];
+static provisioning_config_t s_cfg;
+/* Written on the event-loop task, read by the supervisor task. */
+static volatile bool s_ble_client_connected;
+static volatile bool s_fallback_active;
+static volatile bool s_fallback_got_new_creds;
+static wifi_config_t s_backup_config;
+
+static void reconnect_timeout_cb(void *arg)
+{
+    xEventGroupSetBits(s_supervisor_events, EV_RECONNECT_TIMEOUT);
+}
+
+static void window_timeout_cb(void *arg)
+{
+    xEventGroupSetBits(s_supervisor_events, EV_WINDOW_TIMEOUT);
+}
+
+/* Called on every disconnect: the countdown to fallback starts with the first one. */
+static void note_disconnected(void)
+{
+    if (s_reconnect_timer && !s_fallback_active && !esp_timer_is_active(s_reconnect_timer)) {
+        ESP_LOGI(TAG, "stored network unreachable, re-opening provisioning in %d min if it stays that way",
+                 CONFIG_PROVISIONING_FALLBACK_RECONNECT_MINUTES);
+        esp_timer_start_once(s_reconnect_timer, RECONNECT_TIMEOUT_US);
+    }
+}
+
+static void note_connected(void)
+{
+    if (s_reconnect_timer) {
+        esp_timer_stop(s_reconnect_timer);
+    }
+}
+#else
+#define s_fallback_active false
+static inline void note_disconnected(void) {}
+static inline void note_connected(void) {}
+#endif
 #ifdef CONFIG_PROVISIONING_PROV_SECURITY_VERSION_1
 static char s_pop[POP_MAX_LEN];
 #endif
@@ -140,6 +195,9 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         }
         case WIFI_PROV_CRED_SUCCESS:
             ESP_LOGI(TAG, "Provisioning successful");
+#if CONFIG_PROVISIONING_FALLBACK
+            s_fallback_got_new_creds = true;
+#endif
 #ifdef CONFIG_PROVISIONING_RESET_PROV_MGR_ON_FAILURE
             retries = 0;
 #endif
@@ -147,6 +205,9 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         case WIFI_PROV_END:
             /* De-initialize manager once provisioning is finished */
             wifi_prov_mgr_deinit();
+#if CONFIG_PROVISIONING_FALLBACK
+            xEventGroupSetBits(s_supervisor_events, EV_PROV_DONE);
+#endif
             break;
         default:
             break;
@@ -157,9 +218,13 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             esp_wifi_connect();
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
-            ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
             xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-            esp_wifi_connect();
+            note_disconnected();
+            /* While a provisioning window is open the manager owns the connection attempts. */
+            if (!s_fallback_active) {
+                ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
+                esp_wifi_connect();
+            }
             break;
 #ifdef CONFIG_PROVISIONING_PROV_TRANSPORT_SOFTAP
         case WIFI_EVENT_AP_STACONNECTED:
@@ -176,14 +241,21 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        note_connected();
 #ifdef CONFIG_PROVISIONING_PROV_TRANSPORT_BLE
     } else if (event_base == PROTOCOMM_TRANSPORT_BLE_EVENT) {
         switch (event_id) {
         case PROTOCOMM_TRANSPORT_BLE_CONNECTED:
             ESP_LOGI(TAG, "BLE transport: Connected!");
+#if CONFIG_PROVISIONING_FALLBACK
+            s_ble_client_connected = true;
+#endif
             break;
         case PROTOCOMM_TRANSPORT_BLE_DISCONNECTED:
             ESP_LOGI(TAG, "BLE transport: Disconnected!");
+#if CONFIG_PROVISIONING_FALLBACK
+            s_ble_client_connected = false;
+#endif
             break;
         default:
             break;
@@ -324,6 +396,110 @@ static esp_err_t start_provisioning_service(const provisioning_config_t *config)
     return ESP_OK;
 }
 
+#if CONFIG_PROVISIONING_FALLBACK
+static void open_fallback_window(void)
+{
+    /* The manager blanks the stored STA config while it runs; keep a copy to put back if no
+     * new credentials arrive. */
+    esp_wifi_get_config(WIFI_IF_STA, &s_backup_config);
+    s_fallback_got_new_creds = false;
+
+    esp_err_t err = wifi_prov_mgr_init(s_mgr_config);
+    if (err == ESP_OK) {
+        err = start_provisioning_service(&s_cfg);
+        if (err != ESP_OK) {
+            wifi_prov_mgr_deinit();
+        }
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "could not re-open provisioning (%s), retrying the stored network", esp_err_to_name(err));
+        esp_wifi_connect();
+        esp_timer_start_once(s_reconnect_timer, RECONNECT_TIMEOUT_US);
+        return;
+    }
+    s_fallback_active = true;
+    esp_timer_start_once(s_window_timer, WINDOW_TIMEOUT_US);
+    ESP_LOGI(TAG, "provisioning re-opened for %d min", CONFIG_PROVISIONING_FALLBACK_WINDOW_MINUTES);
+}
+
+static void close_fallback_window(void)
+{
+    /* Blocking stop: no WIFI_PROV_END callback is delivered, so deinit here. */
+    wifi_prov_mgr_stop_provisioning();
+    wifi_prov_mgr_deinit();
+    s_fallback_active = false;
+
+    if (s_backup_config.sta.ssid[0]) {
+        esp_wifi_set_config(WIFI_IF_STA, &s_backup_config);
+    }
+    ESP_LOGI(TAG, "provisioning window over, retrying the stored network for %d min",
+             CONFIG_PROVISIONING_FALLBACK_RECONNECT_MINUTES);
+    esp_wifi_connect();
+    /* The next disconnect would start this too, but a network that is simply absent may not
+     * produce one promptly. */
+    esp_timer_start_once(s_reconnect_timer, RECONNECT_TIMEOUT_US);
+}
+
+/* All fallback transitions happen here: wifi_prov_mgr_stop_provisioning() blocks and must not
+ * run on the event-loop task, and the timers fire on the esp_timer task. */
+static void supervisor_task(void *arg)
+{
+    for (;;) {
+        EventBits_t bits = xEventGroupWaitBits(s_supervisor_events, EV_RECONNECT_TIMEOUT | EV_WINDOW_TIMEOUT | EV_PROV_DONE,
+                                               pdTRUE, pdFALSE, portMAX_DELAY);
+        if (!s_fallback_active) {
+            if (bits & EV_RECONNECT_TIMEOUT) {
+                open_fallback_window();
+            }
+            continue;
+        }
+        if (bits & EV_PROV_DONE) {
+            /* New credentials connected; the manager stopped itself and the handler deinit'd it. */
+            esp_timer_stop(s_window_timer);
+            s_fallback_active = false;
+            ESP_LOGI(TAG, "provisioned with new credentials");
+        } else if (bits & EV_WINDOW_TIMEOUT) {
+            if (s_ble_client_connected) {
+                ESP_LOGI(TAG, "a BLE client is connected, keeping provisioning open for another %d min",
+                         CONFIG_PROVISIONING_FALLBACK_WINDOW_MINUTES);
+                esp_timer_start_once(s_window_timer, WINDOW_TIMEOUT_US);
+            } else if (s_fallback_got_new_creds) {
+                /* Connected with new credentials but the manager has not wrapped up yet: give it a moment. */
+                esp_timer_start_once(s_window_timer, 10 * 1000000ULL);
+            } else {
+                close_fallback_window();
+            }
+        }
+    }
+}
+
+static esp_err_t fallback_init(const provisioning_config_t *config)
+{
+    if (config && config->service_name) {
+        strlcpy(s_cfg_service_name, config->service_name, sizeof(s_cfg_service_name));
+        s_cfg.service_name = s_cfg_service_name;
+    }
+    if (config && config->pop) {
+        strlcpy(s_cfg_pop, config->pop, sizeof(s_cfg_pop));
+        s_cfg.pop = s_cfg_pop;
+    }
+
+    s_supervisor_events = xEventGroupCreate();
+    ESP_RETURN_ON_FALSE(s_supervisor_events, ESP_ERR_NO_MEM, TAG, "no memory for supervisor events");
+
+    const esp_timer_create_args_t reconnect_args = { .callback = reconnect_timeout_cb, .name = "prov_reconnect" };
+    const esp_timer_create_args_t window_args = { .callback = window_timeout_cb, .name = "prov_window" };
+    ESP_RETURN_ON_ERROR(esp_timer_create(&reconnect_args, &s_reconnect_timer), TAG, "timer create failed");
+    ESP_RETURN_ON_ERROR(esp_timer_create(&window_args, &s_window_timer), TAG, "timer create failed");
+
+    ESP_RETURN_ON_FALSE(xTaskCreate(supervisor_task, "prov_supervisor", 4096, NULL, 4, NULL) == pdPASS,
+                        ESP_ERR_NO_MEM, TAG, "no memory for supervisor task");
+    ESP_LOGI(TAG, "fallback provisioning enabled: %d min on the stored network, then %d min of provisioning",
+             CONFIG_PROVISIONING_FALLBACK_RECONNECT_MINUTES, CONFIG_PROVISIONING_FALLBACK_WINDOW_MINUTES);
+    return ESP_OK;
+}
+#endif /* CONFIG_PROVISIONING_FALLBACK */
+
 esp_err_t provisioning_start(const provisioning_config_t *config)
 {
     if (s_wifi_event_group) {
@@ -352,18 +528,27 @@ esp_err_t provisioning_start(const provisioning_config_t *config)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_RETURN_ON_ERROR(esp_wifi_init(&cfg), TAG, "esp_wifi_init failed");
 
-    wifi_prov_mgr_config_t mgr_config = {
+    s_mgr_config = (wifi_prov_mgr_config_t) {
 #ifdef CONFIG_PROVISIONING_PROV_TRANSPORT_BLE
         .scheme = wifi_prov_scheme_ble,
+#if CONFIG_PROVISIONING_FALLBACK
+        /* Provisioning must be able to start again later, so the BT stack stays resident:
+         * releasing its memory (the FREE_BTDM handler) is irreversible until reboot. */
+        .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
+#else
         /* BT is only needed for provisioning, so let the manager free its memory afterwards. */
         .scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM
+#endif
 #endif
 #ifdef CONFIG_PROVISIONING_PROV_TRANSPORT_SOFTAP
         .scheme = wifi_prov_scheme_softap,
         .scheme_event_handler = WIFI_PROV_EVENT_HANDLER_NONE
 #endif
     };
-    ESP_RETURN_ON_ERROR(wifi_prov_mgr_init(mgr_config), TAG, "wifi_prov_mgr_init failed");
+#if CONFIG_PROVISIONING_FALLBACK
+    ESP_RETURN_ON_ERROR(fallback_init(config), TAG, "fallback init failed");
+#endif
+    ESP_RETURN_ON_ERROR(wifi_prov_mgr_init(s_mgr_config), TAG, "wifi_prov_mgr_init failed");
 
     bool provisioned = false;
 #ifdef CONFIG_PROVISIONING_RESET_PROVISIONED

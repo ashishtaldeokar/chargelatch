@@ -10,6 +10,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "esp_err.h"
 #include "sdm_registers.h"
 
@@ -24,11 +25,29 @@ typedef struct {
     bool valid[SDM_MAX_REGISTERS];
 } sdm_reading_t;
 
-/** The register map selected in Kconfig. */
+typedef enum { SDM_PARITY_NONE = 0, SDM_PARITY_EVEN, SDM_PARITY_ODD } sdm_parity_t;
+
+typedef struct {
+    /** sdm_model_t name, e.g. "SDM120". NULL: CONFIG_SDM_METER_DEFAULT_MODEL. */
+    const char *model;
+    /** Modbus slave address 1..247. 0: CONFIG_SDM_METER_DEFAULT_SLAVE_ADDRESS. */
+    uint8_t address;
+    /** 0: CONFIG_SDM_METER_DEFAULT_BAUD_RATE. */
+    uint32_t baud;
+    sdm_parity_t parity;
+} sdm_meter_config_t;
+
+/** Parses "none" / "even" / "odd" (anything else: none). */
+sdm_parity_t sdm_parity_from_string(const char *s);
+
+/** The register map in use (valid after sdm_meter_init()). */
 const sdm_model_t *sdm_meter_model(void);
 
-/** Installs the UART driver in RS-485 half-duplex mode. */
-esp_err_t sdm_meter_init(void);
+/**
+ * Installs the UART driver in RS-485 half-duplex mode. `config` may be NULL for all defaults.
+ * @return ESP_ERR_NOT_FOUND if the model name is unknown to this firmware
+ */
+esp_err_t sdm_meter_init(const sdm_meter_config_t *config);
 
 /**
  * Reads every register of the model, a few Modbus requests in all. Blocks for the duration

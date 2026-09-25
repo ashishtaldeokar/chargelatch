@@ -7,10 +7,18 @@ export interface Device {
   chipFeatures: string[];
   crystalMhz: number | null;
   flashSizeBytes: number | null;
+  meter: MeterConfig | null;
   firmwareVersion: string | null;
   flashCount: number;
   lastFlashedAt: string | null;
   createdAt: string;
+}
+
+export interface MeterConfig {
+  model: string;
+  address: number;
+  baud: number;
+  parity: "none" | "even" | "odd";
 }
 
 export type RegisteredDevice = Device & { created: boolean };
@@ -22,6 +30,7 @@ export interface DeviceRegistration {
   chipFeatures?: string[];
   crystalMhz?: number;
   flashSizeBytes?: number;
+  meter?: MeterConfig;
 }
 
 export interface FactoryApi {

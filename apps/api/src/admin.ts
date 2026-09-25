@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Device } from "@chargelatch/db";
 import { requireRole, type AuthEnv, type TokenVerifier } from "./auth.ts";
 import { BusUnavailableError, DeviceOfflineError, DeviceTimeoutError, type DeviceBus, type LiveDeviceState } from "./device-bus.ts";
-import type { DeviceStore } from "./devices.ts";
+import { meterOf, type DeviceStore } from "./devices.ts";
 import type { TelemetryStore } from "./telemetry.ts";
 import { defaultHook, json } from "./openapi.ts";
 import {
@@ -28,6 +28,7 @@ const toLiveDevice = (device: Device, live: LiveDeviceState) => ({
   macAddress: device.macAddress,
   chipType: device.chipType,
   firmwareVersion: device.firmwareVersion,
+  meterConfig: meterOf(device),
   online: live.online,
   firmware: live.firmware,
   relay: live.relay,

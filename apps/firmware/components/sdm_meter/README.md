@@ -19,8 +19,12 @@ big-endian 32-bit floats). `meter_telemetry` publishes the readings to MQTT.
 - GPIO16/17 are used by PSRAM on WROVER modules: pick other pins there.
 - No answer at all? Swap A and B first, then check baud rate and the meter's Modbus ID.
 
-Everything is in `idf.py menuconfig` → **chargelatch SDM energy meter**: model, slave address (1),
-baud (2400, the SDM120 default; an SDM630 ships at 9600), parity (none), UART and pins.
+**Which meter, and its serial settings, are device configuration, not a build option.** The factory
+app writes `meter_model`, `meter_addr`, `meter_baud` and `meter_parity` into the `fctry` partition
+with the identity (`device_identity_get_meter()`), and `main` passes them to
+`meter_telemetry_start()`. One firmware serves every meter it has a table for. `idf.py menuconfig`
+→ **chargelatch SDM energy meter** only holds the UART/pins and the *defaults* for a board without
+factory data (`SDM120`, address 1, 2400 8N1).
 
 ## Register maps are constants
 
@@ -37,8 +41,9 @@ Adjacent registers are fetched together (at most 40 registers per request, the E
 a full read is 3 requests rather than one per value: about 1 s at 2400 baud.
 
 **Adding a meter:** add its address constants and a table (sorted by address, unique keys), an
-`sdm_model_t`, a Kconfig choice entry and the `MODEL` line in `sdm_meter.c`, and a `check_model()`
-line in the host test. Keep key meanings stable across models: `power` is always total active
+`sdm_model_t` and its entry in `SDM_MODELS[]`, a `check_model()` line in the host test, and a preset
+in `apps/firmware/meters.json` (the factory dropdown; the host test checks the names match). Then
+release the firmware: the factory app only offers meters the bundled firmware lists. Keep key meanings stable across models: `power` is always total active
 power in W, `voltage_l1` only exists on 3-phase meters, and so on. Consumers key off these names.
 
 The SDM630 map is from Eastron's protocol document and has not been run against a real SDM630.

@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Device } from "@chargelatch/db";
 import { generateNvsPartition } from "@chargelatch/nvs-partition";
 import { requireRole, type AuthEnv, type TokenVerifier } from "./auth.ts";
-import type { DeviceStore } from "./devices.ts";
+import { meterOf, type DeviceStore } from "./devices.ts";
 import { defaultHook, json } from "./openapi.ts";
 import {
   DeviceFlashedSchema,
@@ -18,6 +18,8 @@ import {
 export const FACTORY_NAMESPACE = "factory";
 export const IDENTITY_KEY = "identity";
 export const POP_KEY = "pop";
+/** Meter configuration keys; read by the firmware's device_identity component. */
+export const METER_KEYS = { model: "meter_model", address: "meter_addr", baud: "meter_baud", parity: "meter_parity" } as const;
 
 const security = [{ bearerAuth: [] }];
 const authErrors = {
@@ -27,8 +29,9 @@ const authErrors = {
 const notFound = { 404: json(ErrorSchema, "No such device") };
 
 // provisioningPop is a secret: it is destructured away so it can never leak through this DTO.
-export const toDeviceDto = ({ provisioningPop: _secret, ...device }: Device) => ({
+export const toDeviceDto = ({ provisioningPop: _secret, meterModel, meterAddress, meterBaud, meterParity, ...device }: Device) => ({
   ...device,
+  meter: meterOf({ meterModel, meterAddress, meterBaud, meterParity }),
   createdAt: device.createdAt.toISOString(),
   lastFlashedAt: device.lastFlashedAt?.toISOString() ?? null,
 });
@@ -67,7 +70,7 @@ export function createFactoryRoutes(devices: DeviceStore, verifier: TokenVerifie
     responses: {
       200: {
         content: { "application/octet-stream": { schema: z.string().openapi({ format: "binary" }) } },
-        description: "NVS image (namespace `factory`, keys `identity` and `pop`), exactly `size` bytes",
+        description: "NVS image (namespace `factory`: `identity`, `pop`, and `meter_*` when a meter is set), exactly `size` bytes",
       },
       400: json(ErrorSchema, "The size is not a valid NVS partition size"),
       ...authErrors,
@@ -101,7 +104,22 @@ export function createFactoryRoutes(devices: DeviceStore, verifier: TokenVerifie
 
       let image: Uint8Array;
       try {
-        image = generateNvsPartition({ [FACTORY_NAMESPACE]: { [IDENTITY_KEY]: device.identity, [POP_KEY]: device.provisioningPop } }, c.req.valid("query").size);
+        const meter = meterOf(device);
+        image = generateNvsPartition(
+          {
+            [FACTORY_NAMESPACE]: {
+              [IDENTITY_KEY]: device.identity,
+              [POP_KEY]: device.provisioningPop,
+              ...(meter && {
+                [METER_KEYS.model]: meter.model,
+                [METER_KEYS.address]: { type: "u8", value: meter.address },
+                [METER_KEYS.baud]: { type: "u32", value: meter.baud },
+                [METER_KEYS.parity]: meter.parity,
+              }),
+            },
+          },
+          c.req.valid("query").size,
+        );
       } catch (error) {
         return c.json({ error: (error as Error).message }, 400);
       }

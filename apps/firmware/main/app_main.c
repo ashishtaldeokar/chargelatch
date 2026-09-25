@@ -52,8 +52,17 @@ void app_main(void)
         ESP_LOGW(TAG, "MQTT not started");
     }
 
-    /* Energy meter on RS-485 -> devices/<id>/meter every few seconds. */
-    if (meter_telemetry_start() != ESP_OK) {
+    /* Energy meter on RS-485 -> devices/<id>/meter every few seconds. Which meter, and how
+     * to talk to it, was chosen at the factory; a board without factory data uses the
+     * Kconfig defaults. */
+    const device_meter_config_t *factory_meter = device_identity_get_meter();
+    const sdm_meter_config_t meter = {
+        .model = factory_meter->model,
+        .address = factory_meter->address,
+        .baud = factory_meter->baud,
+        .parity = sdm_parity_from_string(factory_meter->parity),
+    };
+    if (meter_telemetry_start(&meter) != ESP_OK) {
         ESP_LOGW(TAG, "meter telemetry not started");
     }
 }

@@ -30,6 +30,16 @@ export const ErrorSchema = z
 
 const MAC_ADDRESS = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 
+/** Energy meter wired to the unit; flashed into the fctry partition with the identity. */
+export const MeterConfigSchema = z
+  .object({
+    model: z.string().regex(/^[A-Z0-9]{2,15}$/, "Model names are upper-case, e.g. SDM120").openapi({ example: "SDM120", description: "Must be a model the flashed firmware implements (its manifest lists them)" }),
+    address: z.int().min(1).max(247).openapi({ example: 1, description: "Modbus slave address" }),
+    baud: z.int().refine((b) => [1200, 2400, 4800, 9600, 19200, 38400].includes(b), "Unsupported baud rate").openapi({ example: 2400, description: "1200, 2400, 4800, 9600, 19200 or 38400" }),
+    parity: z.enum(["none", "even", "odd"]).openapi({ example: "none" }),
+  })
+  .openapi("MeterConfig");
+
 export const DeviceSchema = z
   .object({
     id: z.int().openapi({ example: 1 }),
@@ -40,6 +50,7 @@ export const DeviceSchema = z
     chipFeatures: z.array(z.string()).openapi({ example: ["WiFi", "BT", "Dual Core"] }),
     crystalMhz: z.int().nullable().openapi({ example: 40 }),
     flashSizeBytes: z.int().nullable().openapi({ example: 4194304 }),
+    meter: MeterConfigSchema.nullable().openapi({ description: "null on units flashed before meter selection existed" }),
     firmwareVersion: z.string().nullable().openapi({ example: "0.1.0" }),
     flashCount: z.int().openapi({ example: 1 }),
     lastFlashedAt: z.iso.datetime().nullable(),
@@ -59,6 +70,7 @@ export const RegisterDeviceSchema = z
     chipFeatures: z.array(z.string()).optional(),
     crystalMhz: z.int().positive().optional(),
     flashSizeBytes: z.int().positive().optional(),
+    meter: MeterConfigSchema.optional().openapi({ description: "Recorded on the device and written into its partition. Omit to leave a known device's meter unchanged." }),
   })
   .openapi("RegisterDevice");
 
@@ -123,6 +135,7 @@ export const LiveDeviceSchema = z
     macAddress: z.string(),
     chipType: z.string(),
     firmwareVersion: z.string().nullable().openapi({ description: "Firmware recorded when the device was flashed" }),
+    meterConfig: MeterConfigSchema.nullable().openapi({ description: "The meter chosen at the factory; `meter` below is what it is currently reporting" }),
     online: z.boolean().nullable().openapi({ description: "null = not heard from since the API connected to the broker" }),
     firmware: z.string().nullable().openapi({ description: "Firmware version the device itself reports" }),
     relay: RelayStateSchema.nullable(),

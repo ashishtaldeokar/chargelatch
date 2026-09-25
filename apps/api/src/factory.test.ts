@@ -49,6 +49,45 @@ describe("device registration", () => {
   });
 });
 
+describe("meter configuration", () => {
+  const sdm630 = { model: "SDM630", address: 2, baud: 9600, parity: "none" as const };
+
+  test("is recorded at registration and written into the partition", async () => {
+    const app = createApp(fakeDeps());
+    const res = await register(app, { ...esp32, meter: sdm630 });
+    expect(await res.json()).toMatchObject({ identity: "SONIK-1", meter: sdm630 });
+
+    const image = new Uint8Array(await (await app.request("/api/factory/devices/1/partition?size=24576", { headers: as("factory") })).arrayBuffer());
+    const expected = generateNvsPartition(
+      { factory: { identity: "SONIK-1", pop: "pop-for-1", meter_model: "SDM630", meter_addr: { type: "u8", value: 2 }, meter_baud: { type: "u32", value: 9600 }, meter_parity: "none" } },
+      24576,
+    );
+    expect(Buffer.from(image).equals(Buffer.from(expected))).toBe(true);
+  });
+
+  test("a re-flash with a different meter updates the device; without one it keeps the old", async () => {
+    const app = createApp(fakeDeps());
+    await register(app, { ...esp32, meter: sdm630 });
+    const changed = await register(app, { ...esp32, meter: { model: "SDM120", address: 1, baud: 2400, parity: "even" } });
+    expect(await changed.json()).toMatchObject({ identity: "SONIK-1", created: false, meter: { model: "SDM120", parity: "even" } });
+    const unchanged = await register(app, esp32);
+    expect(await unchanged.json()).toMatchObject({ meter: { model: "SDM120" } });
+  });
+
+  test("rejects an invalid meter", async () => {
+    const app = createApp(fakeDeps());
+    expect((await register(app, { ...esp32, meter: { ...sdm630, address: 0 } })).status).toBe(400);
+    expect((await register(app, { ...esp32, meter: { ...sdm630, baud: 1234 } })).status).toBe(400);
+    expect((await register(app, { ...esp32, meter: { ...sdm630, model: "sdm 630" } })).status).toBe(400);
+  });
+
+  test("units without a meter have meter: null everywhere", async () => {
+    const app = createApp(fakeDeps());
+    await register(app);
+    expect(await (await app.request("/api/admin/devices/SONIK-1", { headers: as("admin") })).json()).toMatchObject({ meterConfig: null, meter: null });
+  });
+});
+
 describe("factory partition", () => {
   test("is the NVS image holding the device identity and PoP", async () => {
     const app = createApp(fakeDeps());

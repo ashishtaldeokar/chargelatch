@@ -43,6 +43,13 @@
       "when": 1790052145082,
       "tag": "0005_telemetry_timescale",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790324162039,
+      "tag": "0006_device_meter_config",
+      "breakpoints": true
     }
   ]
 }

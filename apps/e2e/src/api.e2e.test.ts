@@ -92,6 +92,21 @@ describe("factory api", () => {
     expect(new Set(identities).size).toBe(1);
   });
 
+  test("the meter chosen at the factory lands in the partition, readable by IDF's own NVS tooling format", async () => {
+    const headers = { authorization: `Bearer ${factoryToken}`, "content-type": "application/json" };
+    const res = await app.request("/api/factory/devices", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ macAddress: "24:6f:28:00:00:03", chipType: "ESP32", meter: { model: "SDM630", address: 2, baud: 9600, parity: "even" } }),
+    });
+    expect(await res.json()).toMatchObject({ identity: "SONIK-3", created: false, meter: { model: "SDM630", address: 2, baud: 9600, parity: "even" } });
+
+    const image = Buffer.from(await (await app.request("/api/factory/devices/3/partition?size=24576", { headers })).arrayBuffer());
+    for (const key of ["meter_model\0", "SDM630\0", "meter_addr\0", "meter_baud\0", "meter_parity\0", "even\0"]) {
+      expect(image.includes(Buffer.from(key))).toBe(true);
+    }
+  });
+
   test("serves an NVS partition containing the identity, and records the flash", async () => {
     const headers = { authorization: `Bearer ${factoryToken}`, "content-type": "application/json" };
     const res = await app.request("/api/factory/devices/2/partition?size=24576", { headers });

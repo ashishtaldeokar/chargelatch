@@ -33,6 +33,12 @@ export const devices = pgTable("devices", {
   chipFeatures: text("chip_features").array().notNull().default(sql`'{}'`),
   crystalMhz: integer("crystal_mhz"),
   flashSizeBytes: integer("flash_size_bytes"),
+  // Energy meter wired to this unit, chosen at the factory and flashed into fctry with the
+  // identity. Null on units flashed before meter selection existed (firmware defaults apply).
+  meterModel: text("meter_model"),
+  meterAddress: integer("meter_address"),
+  meterBaud: integer("meter_baud"),
+  meterParity: text("meter_parity"),
   firmwareVersion: text("firmware_version"),
   flashCount: integer("flash_count").notNull().default(0),
   lastFlashedAt: timestamp("last_flashed_at", { withTimezone: true }),

@@ -11,6 +11,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "sdm_meter.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,7 +25,7 @@ extern "C" {
  * Readings taken while MQTT is disconnected are dropped, not queued: stale power values are
  * worthless and would only pile up in memory.
  */
-esp_err_t meter_telemetry_start(void);
+esp_err_t meter_telemetry_start(const sdm_meter_config_t *meter);
 
 #ifdef __cplusplus
 }

@@ -1,44 +1,25 @@
 menu "chargelatch SDM energy meter"
 
-    choice SDM_METER_MODEL
-        prompt "Meter model"
-        default SDM_METER_MODEL_SDM120
+    # The meter model and serial settings are DEVICE CONFIGURATION, written into the fctry
+    # partition by the factory app (see device_identity). The values here are only the defaults
+    # for a board without factory data (flashed with idf.py).
+
+    config SDM_METER_DEFAULT_MODEL
+        string "Default meter model (no factory data)"
+        default "SDM120"
         help
-            Selects the register map (components/sdm_meter/sdm_registers.c).
+            Name of an sdm_model_t in components/sdm_meter/sdm_registers.c (see meters.json).
 
-        config SDM_METER_MODEL_SDM120
-            bool "Eastron SDM120 (1-phase)"
-        config SDM_METER_MODEL_SDM630
-            bool "Eastron SDM630 (3-phase)"
-    endchoice
-
-    config SDM_METER_SLAVE_ADDRESS
-        int "Modbus slave address"
+    config SDM_METER_DEFAULT_SLAVE_ADDRESS
+        int "Default Modbus slave address (no factory data)"
         default 1
         range 1 247
-        help
-            Meter ID as set on the meter (SDM120: hold the button, "Id"). Factory default 1.
 
-    config SDM_METER_BAUD_RATE
-        int "Baud rate"
+    config SDM_METER_DEFAULT_BAUD_RATE
+        int "Default baud rate (no factory data)"
         default 2400
         help
-            Must match the meter. SDM120 factory default is 2400 (1200-9600 selectable);
-            SDM630 is 9600.
-
-    choice SDM_METER_PARITY
-        prompt "Parity"
-        default SDM_METER_PARITY_NONE
-        help
-            Eastron factory default is none (8N1).
-
-        config SDM_METER_PARITY_NONE
-            bool "None (8N1)"
-        config SDM_METER_PARITY_EVEN
-            bool "Even (8E1)"
-        config SDM_METER_PARITY_ODD
-            bool "Odd (8O1)"
-    endchoice
+            SDM120 factory default is 2400; SDM630 is 9600.
 
     config SDM_METER_UART_NUM
         int "UART port"

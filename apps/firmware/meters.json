@@ -1,0 +1,7 @@
+{
+  "$comment": "Meters this firmware can read. `model` must equal an sdm_model_t name in components/sdm_meter/sdm_registers.c (checked by the host tests). Bundled into the factory app's firmware manifest, so the factory dropdown always matches the firmware being flashed. Defaults are the meter's factory serial settings.",
+  "meters": [
+    { "model": "SDM120", "label": "Eastron SDM120 (1-phase)", "phases": 1, "address": 1, "baud": 2400, "parity": "none" },
+    { "model": "SDM630", "label": "Eastron SDM630 (3-phase)", "phases": 3, "address": 1, "baud": 9600, "parity": "none" }
+  ]
+}

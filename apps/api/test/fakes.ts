@@ -24,7 +24,10 @@ export function fakeDeviceStore(): DeviceStore {
   return {
     register: async (registration) => {
       const existing = rows.find((d) => d.macAddress === registration.macAddress);
-      if (existing) return { device: existing, created: false };
+      if (existing) {
+        if (registration.meter) Object.assign(existing, { meterModel: registration.meter.model, meterAddress: registration.meter.address, meterBaud: registration.meter.baud, meterParity: registration.meter.parity });
+        return { device: existing, created: false };
+      }
       const id = rows.length + 1;
       const device: Device = {
         id,
@@ -36,6 +39,10 @@ export function fakeDeviceStore(): DeviceStore {
         chipFeatures: registration.chipFeatures ?? [],
         crystalMhz: registration.crystalMhz ?? null,
         flashSizeBytes: registration.flashSizeBytes ?? null,
+        meterModel: registration.meter?.model ?? null,
+        meterAddress: registration.meter?.address ?? null,
+        meterBaud: registration.meter?.baud ?? null,
+        meterParity: registration.meter?.parity ?? null,
         firmwareVersion: null,
         flashCount: 0,
         lastFlashedAt: null,

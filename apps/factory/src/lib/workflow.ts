@@ -1,4 +1,4 @@
-import type { FactoryApi, RegisteredDevice, Device } from "./api.ts";
+import type { FactoryApi, MeterConfig, RegisteredDevice, Device } from "./api.ts";
 import { normalizeChipFamily, parseFlashSize, type DeviceConnection, type FlashProgress } from "./connection.ts";
 import type { Firmware, FlashFile } from "./firmware.ts";
 
@@ -25,6 +25,8 @@ export interface ProvisionOptions {
   firmware: Firmware;
   /** Wipes the whole chip first, so no Wi-Fi credentials or stale data survive a re-flash. */
   eraseAll: boolean;
+  /** The energy meter wired to this unit; goes into the device record and the identity partition. */
+  meter: MeterConfig;
   events: ProvisionEvents;
 }
 
@@ -32,7 +34,7 @@ export interface ProvisionOptions {
  * The factory flow for one chip: MAC -> identity from the backend -> flash firmware together with
  * the identity partition -> record it. The flash is only recorded once esptool has verified it.
  */
-export async function provisionDevice({ connection, api, firmware, eraseAll, events }: ProvisionOptions): Promise<Device> {
+export async function provisionDevice({ connection, api, firmware, eraseAll, meter, events }: ProvisionOptions): Promise<Device> {
   const { info } = connection;
   if (normalizeChipFamily(info.chipFamily) !== normalizeChipFamily(firmware.manifest.chip)) {
     throw new Error(`This firmware is built for ${firmware.manifest.chip}, but the connected chip is ${info.chipFamily}`);
@@ -47,9 +49,13 @@ export async function provisionDevice({ connection, api, firmware, eraseAll, eve
     );
   }
 
+  if (firmware.manifest.meters && !firmware.manifest.meters.some((m) => m.model === meter.model)) {
+    throw new Error(`This firmware does not support the ${meter.model} meter (it knows: ${firmware.manifest.meters.map((m) => m.model).join(", ")})`);
+  }
+
   events.onStep("register");
   const { chipFamily: _family, ...registration } = info;
-  const device = await api.registerDevice(registration);
+  const device = await api.registerDevice({ ...registration, meter });
   events.onRegistered(device);
 
   events.onStep("identity");

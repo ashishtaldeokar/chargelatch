@@ -20,6 +20,10 @@ export const firmware: Firmware = {
     builtAt: "2026-09-20T00:00:00.000Z",
     flash: { mode: "dio", freq: "40m", size: "4MB" },
     partitionTableOffset: 0x8000,
+    meters: [
+      { model: "SDM120", label: "Eastron SDM120 (1-phase)", phases: 1, address: 1, baud: 2400, parity: "none" },
+      { model: "SDM630", label: "Eastron SDM630 (3-phase)", phases: 3, address: 1, baud: 9600, parity: "none" },
+    ],
     files: [],
   },
   files: [
@@ -52,7 +56,7 @@ export function fakeApi(known: Record<string, number> = {}) {
   const devices: Device[] = [];
   const api: FactoryApi = {
     registerDevice: async (registration) => {
-      calls.push("register");
+      calls.push(`register:${registration.meter?.model ?? "no-meter"}`);
       const id = known[registration.macAddress] ?? devices.length + 1;
       const device: RegisteredDevice = {
         id,
@@ -63,6 +67,7 @@ export function fakeApi(known: Record<string, number> = {}) {
         chipFeatures: registration.chipFeatures ?? [],
         crystalMhz: registration.crystalMhz ?? null,
         flashSizeBytes: registration.flashSizeBytes ?? null,
+        meter: registration.meter ?? null,
         firmwareVersion: null,
         flashCount: known[registration.macAddress] ? 1 : 0,
         lastFlashedAt: null,

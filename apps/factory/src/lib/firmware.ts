@@ -1,6 +1,16 @@
 import { findPartition, parsePartitionTable, type Partition } from "./partition-table.ts";
 
 /** public/firmware/manifest.json, written by scripts/bundle-firmware.ts. */
+/** A meter this firmware can read, with the meter's factory serial defaults. */
+export interface MeterPreset {
+  model: string;
+  label: string;
+  phases: number;
+  address: number;
+  baud: number;
+  parity: "none" | "even" | "odd";
+}
+
 export interface FirmwareManifest {
   name: string;
   version: string;
@@ -8,6 +18,8 @@ export interface FirmwareManifest {
   builtAt: string;
   flash: { mode: string; freq: string; size: string };
   partitionTableOffset: number;
+  /** From apps/firmware/meters.json. Older bundles lack it. */
+  meters?: MeterPreset[];
   files: { name: string; offset: number; size: number; sha256: string }[];
 }
 

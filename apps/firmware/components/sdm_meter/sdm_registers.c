@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "sdm_registers.h"
 
 #define COUNT(table) (sizeof(table) / sizeof((table)[0]))
@@ -54,3 +56,16 @@ _Static_assert(COUNT(sdm630_registers) <= SDM_MAX_REGISTERS, "raise SDM_MAX_REGI
 
 const sdm_model_t SDM_MODEL_SDM120 = { "SDM120", 1, sdm120_registers, COUNT(sdm120_registers) };
 const sdm_model_t SDM_MODEL_SDM630 = { "SDM630", 3, sdm630_registers, COUNT(sdm630_registers) };
+
+const sdm_model_t *const SDM_MODELS[] = { &SDM_MODEL_SDM120, &SDM_MODEL_SDM630 };
+const size_t SDM_MODEL_COUNT = COUNT(SDM_MODELS);
+
+const sdm_model_t *sdm_model_by_name(const char *name)
+{
+    for (size_t i = 0; name && i < SDM_MODEL_COUNT; i++) {
+        if (strcmp(SDM_MODELS[i]->name, name) == 0) {
+            return SDM_MODELS[i];
+        }
+    }
+    return NULL;
+}

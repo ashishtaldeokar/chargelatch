@@ -4,7 +4,8 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { FirmwareManifest } from "../src/lib/firmware.ts";
 
-const buildDir = join(import.meta.dir, "../../firmware/build");
+const firmwareDir = join(import.meta.dir, "../../firmware");
+const buildDir = join(firmwareDir, "build");
 const outDir = join(import.meta.dir, "../public/firmware");
 
 const flasherArgs = Bun.file(join(buildDir, "flasher_args.json"));
@@ -35,6 +36,9 @@ for (const [offset, path] of Object.entries(args.flash_files).sort(([a], [b]) =>
   files.push({ name, offset: Number(offset), size: bytes.length, sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex") });
 }
 
+// Meters this firmware implements: drives the factory app's meter dropdown.
+const { meters } = (await Bun.file(join(firmwareDir, "meters.json")).json()) as { meters: NonNullable<FirmwareManifest["meters"]> };
+
 const manifest: FirmwareManifest = {
   name: project.project_name,
   version: project.project_version,
@@ -42,9 +46,11 @@ const manifest: FirmwareManifest = {
   builtAt: new Date().toISOString(),
   flash: { mode: args.flash_settings.flash_mode, freq: args.flash_settings.flash_freq, size: args.flash_settings.flash_size },
   partitionTableOffset: Number(args["partition-table"].offset),
+  meters,
   files,
 };
 await Bun.write(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 
 console.log(`bundled ${manifest.name} ${manifest.version} (${manifest.chip}) into apps/factory/public/firmware/`);
+console.log(`  meters: ${meters.map((m) => m.model).join(", ")}`);
 for (const file of files) console.log(`  0x${file.offset.toString(16).padStart(6, "0")}  ${file.name}  ${file.size} bytes`);

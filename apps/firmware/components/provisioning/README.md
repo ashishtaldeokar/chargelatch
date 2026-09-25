@@ -31,6 +31,35 @@ This is a *local* component (`components/`, committed) with no external dependen
 ever needed, declare it in an `idf_component.yml` here: it is then downloaded into
 `managed_components/` (gitignored, never edit) and pinned by `dependencies.lock` (commit it).
 
+## Fallback: re-opening provisioning when the network is gone
+
+`CONFIG_PROVISIONING_FALLBACK` (default on, BLE only). A provisioned device that cannot connect to
+its stored network alternates between two states until one works:
+
+| State | Lasts | Ends early when |
+| --- | --- | --- |
+| trying the stored credentials | `FALLBACK_RECONNECT_MINUTES` (5) | it connects |
+| provisioning open over BLE, advertising as usual | `FALLBACK_WINDOW_MINUTES` (5) | new credentials connect; **extended** by another window while a BLE client is connected |
+
+The countdown starts at the first disconnect (at boot with the AP absent, or after a drop
+later). The stored credentials are backed up before a window opens and put back when it closes
+without a successful new provisioning, so a phone that sends wrong credentials during the window
+cannot leave the device without any. New credentials replace the old ones only once they have
+actually connected (`WIFI_PROV_CRED_SUCCESS`).
+
+Implementation: a small supervisor task (`prov_supervisor`) driven by two `esp_timer`s, because
+`wifi_prov_mgr_stop_provisioning()` blocks and must not be called from an event handler. The
+Bluetooth stack stays resident (`WIFI_PROV_EVENT_HANDLER_NONE` instead of `FREE_BTDM`, ~50 KB of
+RAM) since releasing it is irreversible until reboot, and a reboot is not an option: GPIO26 floats
+during reset and the contactor would drop out.
+
+The relay is untouched by all of this (it holds its state through Wi-Fi loss). MQTT simply
+reconnects when Wi-Fi is back.
+
+Untested on hardware: whether NimBLE restarts cleanly after a full manager stop/deinit cycle is
+the first thing to verify with a board (pull the AP, wait 5 min, expect the BLE name to reappear
+in the admin app).
+
 ## Security
 
 Security **version 1** (X25519 + proof-of-possession) is the default because the admin mobile

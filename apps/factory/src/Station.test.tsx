@@ -15,9 +15,29 @@ test("flashes a device and shows the identity to label it with", async () => {
   expect(screen.getByTestId("identity")).toHaveTextContent("SONIK-1");
   expect(screen.getByText("24:6f:28:aa:bb:cc", { selector: "dd" })).toBeInTheDocument();
   expect(calls).toEqual(["erase", "write", "reset", "disconnect"]);
+  expect(await screen.findByRole("cell", { name: "SDM120 @1" })).toBeInTheDocument();
   // The device shows up in the recent list, and the station is ready for the next one.
   expect(await screen.findByRole("cell", { name: "SONIK-1" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Flash next device" })).toBeEnabled();
+});
+
+test("the operator can pick another meter and tweak its serial settings before flashing", async () => {
+  const api = fakeApi();
+  const { connection } = fakeConnection();
+  render(<Station api={api.api} connect={async () => connection} loadFirmware={async () => firmware} />);
+  await screen.findByText("chargelatch_firmware 0.1.0");
+
+  await userEvent.selectOptions(screen.getByLabelText("Model"), "SDM630");
+  expect(screen.getByText(/address 1, 9600 baud, parity none/)).toBeInTheDocument();
+  await userEvent.clear(screen.getByLabelText("Modbus address"));
+  await userEvent.type(screen.getByLabelText("Modbus address"), "3");
+  await userEvent.tab(); // the address is applied when the field loses focus
+  expect(screen.getByText(/address 3, 9600 baud.*changed from the meter's defaults/)).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: "Connect & flash device" }));
+  await screen.findByText(/Flashed and verified/);
+  expect(api.calls[0]).toBe("register:SDM630");
+  expect(await screen.findByRole("cell", { name: "SDM630 @3" })).toBeInTheDocument();
 });
 
 test("shows the failure and always releases the serial port", async () => {

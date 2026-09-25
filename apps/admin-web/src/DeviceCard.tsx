@@ -76,6 +76,7 @@ export function DeviceCard({ device, setRelay, recentPower }: DeviceCardProps) {
           <h3>{device.identity}</h3>
           <span className="muted">
             {device.macAddress} · firmware {device.firmware ?? device.firmwareVersion ?? "unknown"}
+            {device.meterConfig && ` · ${device.meterConfig.model} @${device.meterConfig.address}`}
           </span>
         </div>
         <span className={`badge ${status}`}>{status}</span>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Device, FactoryApi, RegisteredDevice } from "./lib/api.ts";
+import type { Device, FactoryApi, MeterConfig, RegisteredDevice } from "./lib/api.ts";
 import type { ChipInfo, DeviceConnection } from "./lib/connection.ts";
-import type { Firmware } from "./lib/firmware.ts";
+import type { Firmware, MeterPreset } from "./lib/firmware.ts";
+import { MeterPicker } from "./MeterPicker.tsx";
 import { provisionDevice, STEPS, type Step } from "./lib/workflow.ts";
 
 interface StationProps {
@@ -20,6 +21,8 @@ const SYNC_HELP =
   "The chip did not enter download mode. Hold the BOOT (IO0) button, press and release EN/RST, then click again while still holding BOOT. " +
   "Also make sure no other program (idf.py monitor, a serial terminal) has the port open, and that the USB cable carries data.";
 
+export const presetToConfig = (p: MeterPreset): MeterConfig => ({ model: p.model, address: p.address, baud: p.baud, parity: p.parity });
+
 const formatBytes = (bytes: number) => (bytes >= 1 << 20 ? `${(bytes / (1 << 20)).toFixed(0)} MB` : `${(bytes / 1024).toFixed(0)} KB`);
 
 export function Station({ api, connect, loadFirmware }: StationProps) {
@@ -27,6 +30,7 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
   const [firmwareError, setFirmwareError] = useState<string | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [eraseAll, setEraseAll] = useState(true);
+  const [meter, setMeter] = useState<MeterConfig | null>(null);
   const [run, setRun] = useState<Run>({ state: "idle" });
   const [progress, setProgress] = useState<{ name: string; percent: number } | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -36,7 +40,15 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
   const refreshDevices = useCallback(() => api.listDevices().then(setDevices, (e: Error) => appendLog(`! ${e.message}`)), [api, appendLog]);
 
   useEffect(() => {
-    loadFirmware().then(setFirmware, (e: Error) => setFirmwareError(e.message));
+    loadFirmware().then(
+      (fw) => {
+        setFirmware(fw);
+        // Preselect the first meter the firmware supports; the operator changes it per unit.
+        const first = fw.manifest.meters?.[0];
+        setMeter(first ? presetToConfig(first) : null);
+      },
+      (e: Error) => setFirmwareError(e.message),
+    );
     void refreshDevices();
   }, [loadFirmware, refreshDevices]);
 
@@ -45,7 +57,7 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
   }, [log]);
 
   async function flash() {
-    if (!firmware) return;
+    if (!firmware || !meter) return;
     setLog([]);
     setProgress(null);
     setRun({ state: "running" });
@@ -63,6 +75,7 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
         api,
         firmware,
         eraseAll,
+        meter,
         events: {
           onStep: (step) => setRun((current) => ({ ...current, state: "running", step })),
           onRegistered: (device) => {
@@ -154,8 +167,12 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
         {active?.state === "failed" && <p role="alert">{active.error}</p>}
         {active?.state === "done" && <p className="success">Flashed and verified. Label the unit {active.device?.identity}, then connect the next one.</p>}
 
+        {firmware && (
+          <MeterPicker presets={firmware.manifest.meters ?? []} value={meter} onChange={setMeter} disabled={running} />
+        )}
+
         <div className="actions">
-          <button className="primary" onClick={() => void flash()} disabled={!firmware || running}>
+          <button className="primary" onClick={() => void flash()} disabled={!firmware || !meter || running}>
             {running ? "Flashing…" : run.state === "idle" ? "Connect & flash device" : "Flash next device"}
           </button>
           <label>
@@ -182,6 +199,7 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
                 <th>Identity</th>
                 <th>MAC</th>
                 <th>Chip</th>
+                <th>Meter</th>
                 <th>Firmware</th>
                 <th>Flashes</th>
                 <th>Last flashed</th>
@@ -197,6 +215,7 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
                     <code>{device.macAddress}</code>
                   </td>
                   <td>{device.chipType}</td>
+                  <td>{device.meter ? `${device.meter.model} @${device.meter.address}` : "—"}</td>
                   <td>{device.firmwareVersion ?? "—"}</td>
                   <td>{device.flashCount}</td>
                   <td>{device.lastFlashedAt ? new Date(device.lastFlashedAt).toLocaleString() : "never"}</td>
