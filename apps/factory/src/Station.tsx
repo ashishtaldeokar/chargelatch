@@ -165,7 +165,12 @@ export function Station({ api, connect, loadFirmware }: StationProps) {
         )}
 
         {active?.state === "failed" && <p role="alert">{active.error}</p>}
-        {active?.state === "done" && <p className="success">Flashed and verified. Label the unit {active.device?.identity}, then connect the next one.</p>}
+        {active?.state === "done" && (
+          <p className="success">
+            Flashed and verified. Label the unit {active.device?.identity}, then connect the next one. The board has been reset into the new
+            firmware; if it still looks idle, press its EN/RST button once.
+          </p>
+        )}
 
         {firmware && (
           <MeterPicker presets={firmware.manifest.meters ?? []} value={meter} onChange={setMeter} disabled={running} />

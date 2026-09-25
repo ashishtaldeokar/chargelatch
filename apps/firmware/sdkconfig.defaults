@@ -16,3 +16,7 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 ## MQTT broker the devices connect to. The EMQX in docker-compose is for dev/e2e only; to point a
 ## build at it instead, override this in `idf.py menuconfig` with mqtt://<your LAN IP>:1883.
 CONFIG_DEVICE_MQTT_BROKER_URI="mqtt://ashishtaldeokar.ddns.net:1883"
+
+## Crystal: cheap ESP32 modules ship with 26 MHz crystals as well as 40 MHz. With the wrong fixed value
+## every UART baud is off by 26/40 and the console prints gibberish. Autodetect handles both.
+CONFIG_XTAL_FREQ_AUTO=y
