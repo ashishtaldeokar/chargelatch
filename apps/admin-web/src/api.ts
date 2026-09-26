@@ -7,8 +7,27 @@ export interface LiveDevice extends LiveDeviceState {
   macAddress: string;
   chipType: string;
   firmwareVersion: string | null;
+  /** Tenant allowed to run charging transactions on this device. */
+  tenantId: string | null;
   /** The energy meter chosen at the factory; null on units flashed before meter selection existed. */
   meterConfig: { model: string; address: number; baud: number; parity: string } | null;
+}
+
+export interface Tenant {
+  id: string;
+  name: string;
+  keycloakClientId: string;
+  webhookUrl: string | null;
+  meterValueIntervalSeconds: number;
+  createdAt: string;
+}
+
+export interface NewTenant {
+  id: string;
+  name: string;
+  keycloakClientId: string;
+  webhookUrl: string | null;
+  meterValueIntervalSeconds: number;
 }
 
 export interface PowerSample {
@@ -23,6 +42,10 @@ export interface Api {
   setRelay(identity: string, on: boolean): Promise<RelayState>;
   /** Stored power samples for the last `minutes`, oldest first. */
   recentPower(identity: string, minutes: number): Promise<PowerSample[]>;
+  listTenants(): Promise<Tenant[]>;
+  createTenant(tenant: NewTenant): Promise<Tenant>;
+  updateTenant(id: string, patch: Partial<Omit<NewTenant, "id">>): Promise<Tenant>;
+  assignTenant(identity: string, tenantId: string | null): Promise<LiveDevice>;
 }
 
 export function createApi(getToken: () => string | undefined, fetcher: typeof fetch = fetch): Api {
@@ -49,5 +72,9 @@ export function createApi(getToken: () => string | undefined, fetcher: typeof fe
     listDevices: () => request<LiveDevice[]>("/api/admin/devices"),
     setRelay: (identity, on) => request<RelayState>(`/api/admin/devices/${identity}/relay`, { method: "PUT", body: JSON.stringify({ on }) }),
     recentPower: (identity, minutes) => request<PowerSample[]>(`/api/admin/devices/${identity}/power?minutes=${minutes}`),
+    listTenants: () => request<Tenant[]>("/api/admin/tenants"),
+    createTenant: (tenant) => request<Tenant>("/api/admin/tenants", { method: "POST", body: JSON.stringify(tenant) }),
+    updateTenant: (id, patch) => request<Tenant>(`/api/admin/tenants/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    assignTenant: (identity, tenantId) => request<LiveDevice>(`/api/admin/devices/${identity}/tenant`, { method: "PUT", body: JSON.stringify({ tenantId }) }),
   };
 }

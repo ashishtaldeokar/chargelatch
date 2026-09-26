@@ -13,7 +13,7 @@ export const test = base.extend<{ db: Db }>({
       const { db, close } = createDb(process.env.DATABASE_URL!, { max: 1 });
       await db.delete(schema.users);
       // Restart the counter too, so every test starts issuing identities at SONIK-1.
-      await db.execute(sql`truncate table webhook_deliveries, transactions, devices restart identity cascade`);
+      await db.execute(sql`truncate table webhook_deliveries, transactions, devices, tenants restart identity cascade`);
       await seeds.e2e(db);
       await use(db);
       await close();

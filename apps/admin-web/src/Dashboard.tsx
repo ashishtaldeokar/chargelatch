@@ -1,6 +1,6 @@
 import { applyMessage } from "@chargelatch/device-protocol";
 import { useEffect, useRef, useState } from "react";
-import type { Api, LiveDevice } from "./api.ts";
+import type { Api, LiveDevice, Tenant } from "./api.ts";
 import { DeviceCard } from "./DeviceCard.tsx";
 import type { LiveFeed } from "./live.ts";
 
@@ -11,6 +11,7 @@ export function Dashboard({ api, feed }: { api: Api; feed: LiveFeed }) {
   const [devices, setDevices] = useState<LiveDevice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const known = useRef(new Set<string>());
   const lastRefetch = useRef(0);
 
@@ -48,6 +49,7 @@ export function Dashboard({ api, feed }: { api: Api; feed: LiveFeed }) {
       );
     }, (connected) => active && setLive(connected));
     void load();
+    api.listTenants().then((list) => active && setTenants(list), () => {});
 
     return () => {
       active = false;
@@ -68,7 +70,17 @@ export function Dashboard({ api, feed }: { api: Api; feed: LiveFeed }) {
       {devices?.length === 0 && <p className="muted">No devices yet. Flash one with the factory app.</p>}
       <div className="devices">
         {devices?.map((device) => (
-          <DeviceCard key={device.identity} device={device} setRelay={(on) => api.setRelay(device.identity, on)} recentPower={api.recentPower} />
+          <DeviceCard
+            key={device.identity}
+            device={device}
+            setRelay={(on) => api.setRelay(device.identity, on)}
+            recentPower={api.recentPower}
+            tenants={tenants}
+            assignTenant={async (tenantId) => {
+              const updated = await api.assignTenant(device.identity, tenantId);
+              setDevices((current) => current?.map((d) => (d.identity === updated.identity ? { ...d, tenantId: updated.tenantId } : d)) ?? current);
+            }}
+          />
         ))}
       </div>
     </>

@@ -121,6 +121,30 @@ test("the power chart is seeded from stored readings and grows with live ones", 
   expect(await within(figure).findByText("7,200 W")).toBeInTheDocument();
 });
 
+test("a device can be handed to a tenant from its card", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
+  const select = await screen.findByRole("combobox", { name: "SONIK-1 tenant" });
+  expect(await within(select).findByRole("option", { name: "Sonik (sonik)" })).toBeInTheDocument();
+  expect(select).toHaveValue("");
+
+  await userEvent.selectOptions(select, "sonik");
+  expect(backend.assignments).toEqual([["SONIK-1", "sonik"]]);
+  expect(select).toHaveValue("sonik");
+
+  await userEvent.selectOptions(select, "");
+  expect(backend.assignments.at(-1)).toEqual(["SONIK-1", null]);
+});
+
+test("an active charging transaction is shown on the card", async () => {
+  const backend = fakeBackend([device()]);
+  show(backend);
+  await screen.findByRole("article", { name: "SONIK-1" });
+  backend.deviceSays("SONIK-1", "tx", { state: "active", txId: "TX-2026-000123", meterStart: 10, interval: 30 });
+  expect(await screen.findByText("TX-2026-000123")).toBeInTheDocument();
+  expect(screen.getByText(/Charging transaction/)).toBeInTheDocument();
+});
+
 test("an offline device cannot be switched", async () => {
   show(fakeBackend([device({ online: false })]));
   expect(await screen.findByRole("switch", { name: "SONIK-1 contactor" })).toBeDisabled();

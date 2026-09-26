@@ -1,15 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "react-oidc-context";
 import { createApi } from "./api.ts";
 import { ADMIN_ROLE, realmRoles } from "./auth.ts";
 import { Dashboard } from "./Dashboard.tsx";
 import { createMqttFeed } from "./live.ts";
+import { Tenants } from "./Tenants.tsx";
 
 export function App() {
   const auth = useAuth();
   // The api reads the token lazily so a silently renewed token is picked up mid-session.
   const api = useMemo(() => createApi(() => auth.user?.access_token), [auth.user]);
   const feed = useMemo(() => createMqttFeed(), []);
+  const [view, setView] = useState<"devices" | "tenants">("devices");
 
   let body;
   if (auth.isLoading) {
@@ -40,7 +42,19 @@ export function App() {
       </section>
     );
   } else {
-    body = <Dashboard api={api} feed={feed} />;
+    body = (
+      <>
+        <nav className="views" aria-label="Sections">
+          <button className={view === "devices" ? "active" : ""} onClick={() => setView("devices")} aria-current={view === "devices" ? "page" : undefined}>
+            Devices
+          </button>
+          <button className={view === "tenants" ? "active" : ""} onClick={() => setView("tenants")} aria-current={view === "tenants" ? "page" : undefined}>
+            Tenants
+          </button>
+        </nav>
+        {view === "devices" ? <Dashboard api={api} feed={feed} /> : <Tenants api={api} />}
+      </>
+    );
   }
 
   return (

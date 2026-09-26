@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Api, LiveDevice } from "./api.ts";
+import type { Api, LiveDevice, Tenant } from "./api.ts";
 import { splitReadings } from "./meter.ts";
 import { PowerChart } from "./PowerChart.tsx";
 import { appendPoint, fromHistory, trim, WINDOW_MS, type PowerPoint } from "./power-series.ts";
@@ -20,9 +20,12 @@ interface DeviceCardProps {
   device: LiveDevice;
   setRelay: (on: boolean) => Promise<unknown>;
   recentPower: Api["recentPower"];
+  tenants: Tenant[];
+  assignTenant: (tenantId: string | null) => Promise<void>;
 }
 
-export function DeviceCard({ device, setRelay, recentPower }: DeviceCardProps) {
+export function DeviceCard({ device, setRelay, recentPower, tenants, assignTenant }: DeviceCardProps) {
+  const [assignError, setAssignError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const now = useNow(5000);
@@ -100,9 +103,34 @@ export function DeviceCard({ device, setRelay, recentPower }: DeviceCardProps) {
           <span />
         </button>
       </div>
+      {device.transaction?.active && (
+        <p className="muted">
+          Charging transaction <code>{device.transaction.txId}</code> in progress
+        </p>
+      )}
       {pending && <p className="muted">Waiting for the device to confirm…</p>}
       {error && <p role="alert">{error}</p>}
       {!online && <p className="muted">The contactor can only be switched while the device is online.</p>}
+
+      <label className="tenant">
+        Tenant
+        <select
+          value={device.tenantId ?? ""}
+          aria-label={`${device.identity} tenant`}
+          onChange={(e) => {
+            setAssignError(null);
+            assignTenant(e.target.value || null).catch((err: Error) => setAssignError(err.message));
+          }}
+        >
+          <option value="">— none —</option>
+          {tenants.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name} ({t.id})
+            </option>
+          ))}
+        </select>
+      </label>
+      {assignError && <p role="alert">{assignError}</p>}
 
       <section className={`meter ${stale || !online ? "stale" : ""}`}>
         {!meter && <p className="muted">No meter readings yet.</p>}

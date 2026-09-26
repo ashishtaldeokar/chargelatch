@@ -84,3 +84,15 @@ summary { cursor: pointer; color: var(--muted); font-size: 0.875rem; }
 .power-chart .tooltip { position: absolute; top: 1.4rem; right: 0; display: flex; gap: 0.5rem; align-items: baseline; padding: 0.25rem 0.5rem; border-radius: 6px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); font-size: 0.75rem; pointer-events: none; }
 .power-chart .tooltip strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .power-chart .tooltip span { color: var(--muted); }
+
+.views { display: flex; gap: 0.25rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
+.views button { border: none; border-radius: 0; border-bottom: 2px solid transparent; padding: 0.5rem 0.9rem; color: var(--muted); }
+.views button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+label.tenant { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.9rem; font-size: 0.8rem; color: var(--muted); }
+label.tenant select, .tenants input, .tenants select { font: inherit; font-size: 0.875rem; padding: 0.35rem 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+label.tenant select { flex: 1; }
+.tenants form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; align-items: end; margin-bottom: 1.25rem; }
+.tenants form label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); }
+.tenants form .wide { grid-column: 1 / -1; }
+.tenants td input { width: 100%; }
+.tenants .actions-cell { white-space: nowrap; }

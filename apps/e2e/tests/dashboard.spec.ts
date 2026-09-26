@@ -74,6 +74,31 @@ test("a hung device: the switch reports the timeout and stays where it was", asy
   await expect(card.getByRole("switch")).toHaveAttribute("aria-checked", "false");
 });
 
+test("an admin registers a tenant and assigns a device to it from the portal", async ({ page, db }) => {
+  await db.insert(schema.devices).values({ macAddress: "24:6f:28:aa:bb:cc", chipType: "ESP32-D0WD-V3" });
+  await signIn(page, adminUrl, "admin@chargelatch.dev", "admin");
+
+  await page.getByRole("button", { name: "Tenants" }).click();
+  const form = page.getByRole("form", { name: "Add tenant" });
+  await form.getByLabel("Id", { exact: true }).fill("sonik");
+  await form.getByLabel("Name").fill("Sonik");
+  await form.getByLabel("Keycloak client id").fill("chargelatch-partner-sonik");
+  await form.getByLabel("Webhook URL").fill("https://sonik.example/hook");
+  await form.getByRole("button", { name: "Add tenant" }).click();
+  await expect(page.getByRole("row", { name: /sonik/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Devices" }).click();
+  const select = page.getByRole("combobox", { name: "SONIK-1 tenant" });
+  await select.selectOption("sonik");
+  await expect(select).toHaveValue("sonik");
+
+  // Persisted: reload and it is still assigned, and the tenant exists in the database.
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "SONIK-1 tenant" })).toHaveValue("sonik");
+  const [tenant] = await db.select().from(schema.tenants);
+  expect(tenant).toMatchObject({ id: "sonik", keycloakClientId: "chargelatch-partner-sonik", webhookUrl: "https://sonik.example/hook" });
+});
+
 test("accounts without the admin role are turned away", async ({ page }) => {
   await signIn(page, adminUrl, "factory@chargelatch.dev", "factory");
   await expect(page.getByRole("alert")).toContainText("does not have the admin role");
