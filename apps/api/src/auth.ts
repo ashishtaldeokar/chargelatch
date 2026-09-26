@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { createMiddleware } from "hono/factory";
 
 export interface AuthClaims {
@@ -37,6 +37,21 @@ export function createKeycloakVerifier(issuer: string, audience: string): TokenV
   };
 }
 
+/**
+ * A 401 reason precise enough to fix the Keycloak client from, without leaking anything: which
+ * claim failed (audience mapper missing, wrong issuer, expiry) rather than a generic "invalid".
+ */
+export function describeTokenError(error: unknown): string {
+  if (error instanceof joseErrors.JWTExpired) return "Token expired";
+  if (error instanceof joseErrors.JWTClaimValidationFailed) {
+    if (error.claim === "aud") return 'Token audience does not include "chargelatch-api" (the client needs the audience mapper)';
+    if (error.claim === "iss") return "Token issuer does not match this API's KEYCLOAK_ISSUER";
+    return `Token claim "${error.claim}" ${error.reason}`;
+  }
+  if (error instanceof joseErrors.JWSSignatureVerificationFailed) return "Token signature is not from this API's Keycloak realm";
+  return "Invalid token";
+}
+
 /** 401 without a valid token, 403 without the realm role. Sets `c.var.auth`. */
 export function requireRole(verifier: TokenVerifier, role: string) {
   return createMiddleware<AuthEnv>(async (c, next) => {
@@ -46,8 +61,8 @@ export function requireRole(verifier: TokenVerifier, role: string) {
     let claims: AuthClaims;
     try {
       claims = await verifier.verify(token);
-    } catch {
-      return c.json({ error: "Invalid or expired token" }, 401);
+    } catch (error) {
+      return c.json({ error: describeTokenError(error) }, 401);
     }
     if (!claims.roles.includes(role)) return c.json({ error: `Requires the "${role}" role` }, 403);
 
