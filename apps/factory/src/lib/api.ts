@@ -41,7 +41,7 @@ export interface FactoryApi {
 }
 
 export function createFactoryApi(getToken: () => string | undefined, fetcher: typeof fetch = fetch): FactoryApi {
-  async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  async function request(path: string, init: RequestInit = {}, expect: "json" | "binary" = "json"): Promise<Response> {
     const token = getToken();
     if (!token) throw new Error("Not signed in");
     const res = await fetcher(path, {
@@ -50,8 +50,10 @@ export function createFactoryApi(getToken: () => string | undefined, fetcher: ty
     });
     // A reverse proxy without a /api route answers with the SPA's index.html: say so instead of
     // failing with "Unexpected token <" from JSON.parse.
-    if (!res.headers.get("content-type")?.includes("json")) {
-      throw new Error(`${path} did not return JSON (${res.status} ${res.headers.get("content-type") ?? "no content-type"}). Is /api proxied to the API server?`);
+    // Error bodies are always JSON; success bodies are JSON except for the partition download.
+    const wanted = res.ok ? (expect === "json" ? "json" : "octet-stream") : "json";
+    if (!res.headers.get("content-type")?.includes(wanted)) {
+      throw new Error(`${path} did not return ${wanted === "json" ? "JSON" : "a binary partition"} (${res.status} ${res.headers.get("content-type") ?? "no content-type"}). Is /api proxied to the API server?`);
     }
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -65,7 +67,7 @@ export function createFactoryApi(getToken: () => string | undefined, fetcher: ty
       (await request("/api/factory/devices", { method: "POST", body: JSON.stringify(registration) })).json() as Promise<RegisteredDevice>,
     listDevices: async () => (await request("/api/factory/devices")).json() as Promise<Device[]>,
     getFactoryPartition: async (deviceId, size) =>
-      new Uint8Array(await (await request(`/api/factory/devices/${deviceId}/partition?size=${size}`)).arrayBuffer()),
+      new Uint8Array(await (await request(`/api/factory/devices/${deviceId}/partition?size=${size}`, {}, "binary")).arrayBuffer()),
     markFlashed: async (deviceId, firmwareVersion) =>
       (await request(`/api/factory/devices/${deviceId}/flashed`, { method: "POST", body: JSON.stringify({ firmwareVersion }) })).json() as Promise<Device>,
   };
