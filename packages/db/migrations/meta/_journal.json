@@ -50,6 +50,13 @@
       "when": 1790324162039,
       "tag": "0006_device_meter_config",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790405014589,
+      "tag": "0007_transactions",
+      "breakpoints": true
     }
   ]
 }

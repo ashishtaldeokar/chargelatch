@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "charging_session.h"
 #include "device_mqtt.h"
 #include "meter_telemetry.h"
 #include "sdm_json.h"
@@ -34,6 +35,8 @@ static void telemetry_task(void *arg)
             }
             last_status = status;
         }
+
+        charging_session_note_reading(&reading, status == ESP_OK);
 
         if (device_mqtt_is_connected()) {
             if (sdm_json_format(model, reading.values, reading.valid, error, json, sizeof(json)) > 0) {

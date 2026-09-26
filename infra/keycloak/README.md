@@ -22,10 +22,11 @@
 | `chargelatch-admin-web` | public, PKCE (S256) | redirects `http://localhost:5173/*`, `http://localhost:5273/*` (e2e)   |
 | `chargelatch-admin-mobile` | public, PKCE (S256) | redirect `com.sonik.chargelatch.admin:/*` (Flutter app id)      |
 | `chargelatch-automation` | confidential, **service account** | secret `dev-automation-secret`; `client_credentials` only (no user, no browser flow); its service-account user has realm role `admin`. For scripts, cron, integrations. |
+| `chargelatch-partner-sonik` | confidential, **service account** | secret `dev-sonik-secret`; realm role `partner`; mapped to tenant `sonik` by the API (`tenants.keycloak_client_id`). One such client per tenant. |
 | `chargelatch-factory` | public, PKCE (S256) | redirects `http://localhost:5174/*`, `http://localhost:5274/*` (e2e)   |
 
 Every client has an audience mapper, so access tokens carry `aud: chargelatch-api`.
-Realm roles: `admin`, `user`, `factory` (may issue device identities; enforced by the API on `/api/factory/*`). `admin` is also what `/api/admin/*` requires, e.g. to read a device's provisioning PoP.
+Realm roles: `admin`, `user`, `factory` (may issue device identities; enforced by the API on `/api/factory/*`), `partner` (tenant service accounts, `/api/partner/*`; the tenant comes from the token's client id). `admin` is also what `/api/admin/*` requires, e.g. to read a device's provisioning PoP.
 
 ### Dev-only fixtures — never use outside local dev / e2e
 

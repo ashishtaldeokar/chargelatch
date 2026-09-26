@@ -135,6 +135,7 @@ export const LiveDeviceSchema = z
     macAddress: z.string(),
     chipType: z.string(),
     firmwareVersion: z.string().nullable().openapi({ description: "Firmware recorded when the device was flashed" }),
+    tenantId: z.string().nullable().openapi({ description: "Tenant allowed to run transactions on this device" }),
     meterConfig: MeterConfigSchema.nullable().openapi({ description: "The meter chosen at the factory; `meter` below is what it is currently reporting" }),
     online: z.boolean().nullable().openapi({ description: "null = not heard from since the API connected to the broker" }),
     firmware: z.string().nullable().openapi({ description: "Firmware version the device itself reports" }),
@@ -143,7 +144,99 @@ export const LiveDeviceSchema = z
   })
   .openapi("LiveDevice");
 
-export const SetRelaySchema = z.object({ on: z.boolean().openapi({ description: "true closes the contactor" }) }).openapi("SetRelay");
+export const SetRelaySchema = z
+  .object({
+    on: z.boolean().openapi({ description: "true closes the contactor" }),
+    force: z.boolean().optional().openapi({ description: "Switching off during a charging transaction is refused (409) unless force is true, which ends the transaction properly (stop reason `admin`)" }),
+  })
+  .openapi("SetRelay");
+
+// ---- Tenants and transactions ----
+
+export const TenantSchema = z
+  .object({
+    id: z.string().openapi({ example: "sonik" }),
+    name: z.string().openapi({ example: "Sonik" }),
+    keycloakClientId: z.string().openapi({ example: "chargelatch-partner-sonik", description: "Service-account client whose tokens act for this tenant" }),
+    webhookUrl: z.string().nullable().openapi({ example: "https://partner.example.com/chargelatch/webhook" }),
+    meterValueIntervalSeconds: z.int().openapi({ example: 30 }),
+    createdAt: z.iso.datetime(),
+  })
+  .openapi("Tenant");
+
+export const CreateTenantSchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]{1,31}$/, "lower-case slug").openapi({ example: "sonik" }),
+    name: z.string().min(1),
+    keycloakClientId: z.string().min(1).openapi({ example: "chargelatch-partner-sonik" }),
+    webhookUrl: z.url().nullable().default(null),
+    meterValueIntervalSeconds: z.int().min(5).max(3600).default(30),
+  })
+  .openapi("CreateTenant");
+
+export const UpdateTenantSchema = CreateTenantSchema.omit({ id: true }).partial().openapi("UpdateTenant");
+
+export const TenantIdParamSchema = z.object({ id: z.string().openapi({ param: { name: "id", in: "path" }, example: "sonik" }) });
+
+export const AssignTenantSchema = z.object({ tenantId: z.string().nullable().openapi({ example: "sonik", description: "null unassigns" }) }).openapi("AssignTenant");
+
+export const TransactionIdParamSchema = z.object({
+  transactionId: z.string().min(1).max(64).openapi({ param: { name: "transactionId", in: "path" }, example: "TX-2026-000123" }),
+});
+
+export const StartTransactionSchema = z
+  .object({
+    transactionId: z
+      .string()
+      .regex(/^[A-Za-z0-9._:-]{1,63}$/, "1-63 characters: letters, digits, . _ : -")
+      .openapi({ example: "TX-2026-000123", description: "Your identifier for the session; unique per tenant. Starting the same id again is idempotent." }),
+    meterValueIntervalSeconds: z.int().min(5).max(3600).optional().openapi({ example: 30, description: "How often MeterValues are sent while the session is active; defaults to the tenant setting" }),
+  })
+  .openapi("StartTransaction");
+
+export const TransactionSchema = z
+  .object({
+    transactionId: z.string().openapi({ example: "TX-2026-000123" }),
+    deviceIdentity: z.string().openapi({ example: "SONIK-42" }),
+    state: z.enum(["starting", "active", "stopping", "stopped", "failed"]).openapi({
+      description:
+        "starting: command sent, waiting for the device · active: contactor closed · stopping: stop sent, waiting (or queued until the device is back online) · stopped: ended, summary final · failed: the device never confirmed the start",
+    }),
+    meterValueIntervalSeconds: z.int(),
+    requestedAt: z.iso.datetime(),
+    startedAt: z.iso.datetime().nullable().openapi({ description: "When the device confirmed the contactor closed" }),
+    stoppedAt: z.iso.datetime().nullable(),
+    stopReason: z.string().nullable().openapi({ example: "remote", description: "remote | superseded | admin | failed" }),
+    summary: z
+      .object({
+        energyWh: z.number().nullable().openapi({ example: 7420.5, description: "From the meter's own cumulative counter, exact even if samples were missed" }),
+        energyQuality: z.enum(["metered", "partial"]).nullable().openapi({ description: "partial: the counter could not be read at start or stop" }),
+        meterStartKwh: z.number().nullable(),
+        meterStopKwh: z.number().nullable(),
+        durationSeconds: z.number().nullable(),
+        powerAvgW: z.number().nullable(),
+        powerMaxW: z.number().nullable(),
+        currentMaxA: z.number().nullable(),
+        voltageMinV: z.number().nullable(),
+        voltageMaxV: z.number().nullable(),
+        sampleCount: z.int().nullable(),
+        meterUnreadableSamples: z.int().nullable(),
+      })
+      .nullable()
+      .openapi({ description: "Present once the transaction is stopped" }),
+    failureReason: z.string().nullable(),
+  })
+  .openapi("Transaction");
+
+export const PartnerDeviceSchema = z
+  .object({
+    identity: z.string().openapi({ example: "SONIK-42" }),
+    online: z.boolean().nullable(),
+    contactorOn: z.boolean().nullable(),
+    activeTransactionId: z.string().nullable().openapi({ description: "The device's own view; null when idle" }),
+    meter: MeterReadingSchema.nullable(),
+  })
+  .openapi("PartnerDevice");
 
 export const PowerSampleSchema = z
   .object({

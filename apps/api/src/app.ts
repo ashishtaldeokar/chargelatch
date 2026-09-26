@@ -7,8 +7,11 @@ import type { TokenVerifier } from "./auth.ts";
 import type { DeviceBus } from "./device-bus.ts";
 import type { DeviceStore } from "./devices.ts";
 import type { TelemetryStore } from "./telemetry.ts";
+import type { TenantStore } from "./tenants.ts";
+import type { TransactionStore } from "./transactions.ts";
 import { createAdminRoutes } from "./admin.ts";
 import { createFactoryRoutes } from "./factory.ts";
+import { createPartnerRoutes, PARTNER_TAG } from "./partner.ts";
 import { defaultHook, json, openApiInfo } from "./openapi.ts";
 import { ErrorSchema, HealthSchema, NewUserSchema, UserSchema } from "./schemas.ts";
 import type { UserStore } from "./users.ts";
@@ -20,7 +23,11 @@ export interface AppDeps {
   devices: DeviceStore;
   bus: DeviceBus;
   telemetry: TelemetryStore;
+  tenants: TenantStore;
+  transactions: TransactionStore;
   auth: TokenVerifier;
+  /** Keycloak token endpoint, shown in the docs so partners can authorise in Swagger UI. */
+  tokenUrl?: string;
 }
 
 const healthRoute = createRoute({
@@ -53,7 +60,7 @@ const createUserRoute = createRoute({
 
 const toUserDto = (user: User) => ({ ...user, createdAt: user.createdAt.toISOString() });
 
-export function createApp({ users, devices, bus, telemetry, auth }: AppDeps) {
+export function createApp({ users, devices, bus, telemetry, tenants, transactions, auth, tokenUrl = "http://localhost:8080/realms/chargelatch/protocol/openid-connect/token" }: AppDeps) {
   const app = new OpenAPIHono({ defaultHook });
 
   app.use(logger());
@@ -65,15 +72,36 @@ export function createApp({ users, devices, bus, telemetry, auth }: AppDeps) {
     bearerFormat: "JWT",
     description: "Keycloak access token (realm `chargelatch`, audience `chargelatch-api`)",
   });
+  // Partners authorise with their service account: Swagger UI's "Authorize" takes the client id and
+  // secret and fetches the token itself (Keycloak allows that from the docs origin via the
+  // client's web origins).
+  app.openAPIRegistry.registerComponent("securitySchemes", "partnerAuth", {
+    type: "oauth2",
+    description: "Tenant service account (OAuth2 client credentials). Use your client id and secret.",
+    flows: { clientCredentials: { tokenUrl, scopes: {} } },
+  });
   app.doc31("/api/openapi.json", openApiInfo);
   app.get("/api/docs", swaggerUI({ url: "/api/openapi.json" }));
+
+  // A spec with only the partner-facing operations, for sharing with tenants.
+  app.get("/api/partner/openapi.json", (c) => {
+    const full = app.getOpenAPI31Document(openApiInfo);
+    const paths = Object.fromEntries(
+      Object.entries(full.paths ?? {})
+        .map(([path, ops]) => [path, Object.fromEntries(Object.entries(ops as Record<string, { tags?: string[] }>).filter(([, op]) => op.tags?.includes(PARTNER_TAG)))] as const)
+        .filter(([, ops]) => Object.keys(ops).length > 0),
+    );
+    return c.json({ ...full, info: { ...full.info, title: "chargelatch partner API" }, paths });
+  });
+  app.get("/api/partner/docs", swaggerUI({ url: "/api/partner/openapi.json" }));
 
   return app
     .openapi(healthRoute, (c) => c.json({ status: "ok" as const }, 200))
     .openapi(listUsersRoute, async (c) => c.json((await users.list()).map(toUserDto), 200))
     .openapi(createUserRoute, async (c) => c.json(toUserDto(await users.create(c.req.valid("json"))), 201))
     .route("/", createFactoryRoutes(devices, auth))
-    .route("/", createAdminRoutes(devices, bus, telemetry, auth));
+    .route("/", createAdminRoutes(devices, bus, telemetry, tenants, auth))
+    .route("/", createPartnerRoutes(devices, transactions, tenants, bus, auth));
 }
 
 // For typed clients via `hc<AppType>()` from "hono/client".

@@ -1,9 +1,11 @@
 /*
  * Remote control of the relay over MQTT.
  *
- *   devices/<id>/cmd/relay   <- {"on":true,"id":"<request id>"}   ("id" optional; plain "on"/"off"
- *                               is also accepted, handy with mosquitto_pub)
- *   devices/<id>/relay       -> {"on":true,"id":"<request id>"}   retained; "id" echoes the command
+ *   devices/<id>/cmd/relay   <- {"on":true,"id":"<request id>","force":false}   ("id"/"force" optional;
+ *                               plain "on"/"off" is also accepted, handy with mosquitto_pub)
+ *   devices/<id>/relay       -> {"on":true,"id":"<request id>"}   retained; carries
+ *                               "rejected":"transaction_active" when a plain "off" was refused
+ *                               because a charging transaction is running (use force); "id" echoes the command
  *                               that caused this state, which is how the API knows its request
  *                               was carried out. Published after every command and on every
  *                               (re)connect, so the broker always holds the true state.
@@ -21,6 +23,13 @@ extern "C" {
 
 /** Handles the payload of a devices/<id>/cmd/relay message. */
 void relay_remote_handle_command(const char *payload, size_t payload_len);
+
+/**
+ * Asked before every remote switch. Return false to refuse (the state is then republished with
+ * "rejected"). Installed by the charging session so an "off" cannot cut a transaction short.
+ */
+typedef bool (*relay_remote_guard_t)(bool on, bool force);
+void relay_remote_set_guard(relay_remote_guard_t guard);
 
 /** Publishes the current state (retained). Call whenever MQTT (re)connects. */
 void relay_remote_publish_state(void);

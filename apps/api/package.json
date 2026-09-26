@@ -9,7 +9,10 @@
     "./devices": "./src/devices.ts",
     "./users": "./src/users.ts",
     "./device-bus": "./src/device-bus.ts",
-    "./telemetry": "./src/telemetry.ts"
+    "./telemetry": "./src/telemetry.ts",
+    "./tenants": "./src/tenants.ts",
+    "./transactions": "./src/transactions.ts",
+    "./partner": "./src/partner.ts"
   },
   "scripts": {
     "dev": "bun --watch src/index.ts",

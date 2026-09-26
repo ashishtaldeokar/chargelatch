@@ -1,12 +1,18 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Device } from "@chargelatch/db";
 import { requireRole, type AuthEnv, type TokenVerifier } from "./auth.ts";
-import { BusUnavailableError, DeviceOfflineError, DeviceTimeoutError, type DeviceBus, type LiveDeviceState } from "./device-bus.ts";
+import { BusUnavailableError, DeviceOfflineError, DeviceTimeoutError, RelayRejectedError, type DeviceBus, type LiveDeviceState } from "./device-bus.ts";
 import { meterOf, type DeviceStore } from "./devices.ts";
 import type { TelemetryStore } from "./telemetry.ts";
+import type { TenantStore } from "./tenants.ts";
 import { defaultHook, json } from "./openapi.ts";
 import {
+  AssignTenantSchema,
+  CreateTenantSchema,
   DeviceIdentityParamSchema,
+  TenantIdParamSchema,
+  TenantSchema,
+  UpdateTenantSchema,
   ErrorSchema,
   LiveDeviceSchema,
   PowerHistoryQuerySchema,
@@ -28,6 +34,7 @@ const toLiveDevice = (device: Device, live: LiveDeviceState) => ({
   macAddress: device.macAddress,
   chipType: device.chipType,
   firmwareVersion: device.firmwareVersion,
+  tenantId: device.tenantId,
   meterConfig: meterOf(device),
   online: live.online,
   firmware: live.firmware,
@@ -35,7 +42,12 @@ const toLiveDevice = (device: Device, live: LiveDeviceState) => ({
   meter: live.meter,
 });
 
-export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, telemetry: TelemetryStore, verifier: TokenVerifier) {
+const toTenantDto = (tenant: { id: string; name: string; keycloakClientId: string; webhookUrl: string | null; meterValueIntervalSeconds: number; createdAt: Date }) => ({
+  ...tenant,
+  createdAt: tenant.createdAt.toISOString(),
+});
+
+export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, telemetry: TelemetryStore, tenants: TenantStore, verifier: TokenVerifier) {
   const provisioningRoute = createRoute({
     ...base,
     method: "get",
@@ -98,10 +110,46 @@ export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, telemetr
       400: json(ErrorSchema, "Invalid request"),
       ...authErrors,
       ...notFound,
-      409: json(ErrorSchema, "The device is offline"),
+      409: json(ErrorSchema, "The device is offline, or has an active charging transaction (send force: true to end it)"),
       503: json(ErrorSchema, "The API is not connected to the MQTT broker"),
       504: json(ErrorSchema, "The device did not confirm in time; its state is unknown"),
     },
+  });
+
+  const listTenantsRoute = createRoute({
+    ...base,
+    method: "get",
+    path: "/api/admin/tenants",
+    summary: "Tenants (third parties using the partner API)",
+    responses: { 200: json(z.array(TenantSchema), "All tenants"), ...authErrors },
+  });
+
+  const createTenantRoute = createRoute({
+    ...base,
+    method: "post",
+    path: "/api/admin/tenants",
+    summary: "Register a tenant",
+    description: "The Keycloak client must exist as a service account with the `partner` realm role; tokens it obtains then act for this tenant.",
+    request: { body: { ...json(CreateTenantSchema, "The tenant"), required: true } },
+    responses: { 201: json(TenantSchema, "Created"), 400: json(ErrorSchema, "Invalid request"), ...authErrors, 409: json(ErrorSchema, "Id or client already used") },
+  });
+
+  const updateTenantRoute = createRoute({
+    ...base,
+    method: "patch",
+    path: "/api/admin/tenants/{id}",
+    summary: "Change a tenant (e.g. its webhook URL)",
+    request: { params: TenantIdParamSchema, body: { ...json(UpdateTenantSchema, "Fields to change"), required: true } },
+    responses: { 200: json(TenantSchema, "Updated"), 400: json(ErrorSchema, "Invalid request"), ...authErrors, 404: json(ErrorSchema, "No such tenant") },
+  });
+
+  const assignTenantRoute = createRoute({
+    ...base,
+    method: "put",
+    path: "/api/admin/devices/{identity}/tenant",
+    summary: "Assign a device to a tenant (or unassign with null)",
+    request: { params: DeviceIdentityParamSchema, body: { ...json(AssignTenantSchema, "The tenant"), required: true } },
+    responses: { 200: json(LiveDeviceSchema, "The device"), 400: json(ErrorSchema, "Invalid request"), ...authErrors, 404: json(ErrorSchema, "No such device or tenant") },
   });
 
   const powerRoute = createRoute({
@@ -150,14 +198,35 @@ export function createAdminRoutes(devices: DeviceStore, bus: DeviceBus, telemetr
 
       const { on } = c.req.valid("json");
       try {
-        const relay = await bus.setRelay(device.identity, on);
+        const relay = await bus.setRelay(device.identity, on, c.req.valid("json").force ?? false);
         console.log(`relay ${device.identity} -> ${on ? "on" : "off"} by ${c.var.auth.email ?? c.var.auth.sub}`);
         return c.json(relay, 200);
       } catch (error) {
-        if (error instanceof DeviceOfflineError) return c.json({ error: error.message }, 409);
+        if (error instanceof DeviceOfflineError || error instanceof RelayRejectedError) return c.json({ error: error.message }, 409);
         if (error instanceof DeviceTimeoutError) return c.json({ error: error.message }, 504);
         if (error instanceof BusUnavailableError) return c.json({ error: error.message }, 503);
         throw error;
       }
+    })
+    .openapi(listTenantsRoute, async (c) => c.json((await tenants.list()).map(toTenantDto), 200))
+    .openapi(createTenantRoute, async (c) => {
+      const body = c.req.valid("json");
+      const all = await tenants.list();
+      if (all.some((t) => t.id === body.id || t.keycloakClientId === body.keycloakClientId)) return c.json({ error: "A tenant with that id or Keycloak client already exists" }, 409);
+      return c.json(toTenantDto(await tenants.create(body)), 201);
+    })
+    .openapi(updateTenantRoute, async (c) => {
+      const tenant = await tenants.update(c.req.valid("param").id, c.req.valid("json"));
+      if (!tenant) return c.json({ error: "No such tenant" }, 404);
+      return c.json(toTenantDto(tenant), 200);
+    })
+    .openapi(assignTenantRoute, async (c) => {
+      const device = await devices.getByIdentity(c.req.valid("param").identity);
+      if (!device) return c.json({ error: "No such device" }, 404);
+      const { tenantId } = c.req.valid("json");
+      if (tenantId !== null && !(await tenants.get(tenantId))) return c.json({ error: "No such tenant" }, 404);
+      const updated = (await devices.setTenant(device.id, tenantId))!;
+      console.log(`device ${device.identity} assigned to tenant ${tenantId ?? "none"} by ${c.var.auth.email ?? c.var.auth.sub}`);
+      return c.json(toLiveDevice(updated, bus.getState(updated.identity)), 200);
     });
 }

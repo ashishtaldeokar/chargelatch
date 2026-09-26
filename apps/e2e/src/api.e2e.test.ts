@@ -7,6 +7,8 @@ import { createKeycloakVerifier } from "@chargelatch/api/auth";
 import { MqttDeviceBus } from "@chargelatch/api/device-bus";
 import { createDeviceStore } from "@chargelatch/api/devices";
 import { createTelemetryStore } from "@chargelatch/api/telemetry";
+import { createTenantStore } from "@chargelatch/api/tenants";
+import { createTransactionStore } from "@chargelatch/api/transactions";
 import { createUserStore } from "@chargelatch/api/users";
 import { createDb, schema } from "@chargelatch/db";
 import { eq } from "drizzle-orm";
@@ -39,6 +41,8 @@ beforeAll(async () => {
     devices: createDeviceStore(db),
     bus,
     telemetry: createTelemetryStore(db),
+    tenants: createTenantStore(db),
+    transactions: createTransactionStore(db),
     auth: createKeycloakVerifier(`${keycloak.baseUrl}/realms/${REALM}`, "chargelatch-api"),
   });
   factoryToken = await getAccessToken(keycloak.baseUrl, FIXTURE_USERS.factory);

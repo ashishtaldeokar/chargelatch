@@ -16,6 +16,7 @@ describe("meter readings", () => {
       reading: {
         time: now,
         deviceId: 1,
+        transactionId: null,
         model: "SDM630",
         ok: true,
         error: null,
@@ -30,7 +31,7 @@ describe("meter readings", () => {
 
   test("a failed read is stored as a row with the error and no values", () => {
     const result = ingester().ingest("devices/SONIK-1/meter", JSON.stringify({ model: "SDM120", phases: 1, ok: false, error: "timeout" }), now);
-    expect(result).toEqual({ reading: { time: now, deviceId: 1, model: "SDM120", ok: false, error: "timeout" } });
+    expect(result).toEqual({ reading: { time: now, deviceId: 1, transactionId: null, model: "SDM120", ok: false, error: "timeout" } });
   });
 
   test("unregistered identities, foreign topics and malformed payloads are dropped", () => {
@@ -39,6 +40,29 @@ describe("meter readings", () => {
     expect(i.ingest("devices/SONIK-1/cmd/relay", JSON.stringify({ on: true }), now)).toBeNull();
     expect(i.ingest("devices/SONIK-1/meter", "not json", now)).toBeNull();
     expect(i.ingest("devices/SONIK-1/meter", JSON.stringify({ voltage: 230 }), now)).toBeNull();
+  });
+});
+
+describe("transactions", () => {
+  test("readings taken during a known transaction carry its row id; tx messages come out as such", () => {
+    const i = new Ingester((identity) => registry[identity], (deviceId, txId) => (deviceId === 1 && txId === "T1" ? "row-uuid" : undefined));
+    expect(i.ingest("devices/SONIK-1/tx", JSON.stringify({ state: "active", txId: "T1", meterStart: 10, interval: 30 }), now)).toEqual({
+      transaction: { active: true, txId: "T1", meterStart: 10, intervalSeconds: 30, updatedAt: now.toISOString() },
+    });
+    const reading = i.ingest("devices/SONIK-1/meter", JSON.stringify({ model: "SDM120", phases: 1, ok: true, power: 5 }), now);
+    expect(reading).toMatchObject({ reading: { transactionId: "row-uuid" } });
+
+    expect(i.ingest("devices/SONIK-1/tx/end", JSON.stringify({ txId: "T1", meterStart: 10, meterStop: 10.5, energyWh: 500, reason: "remote", id: "r" }), now)).toEqual({
+      transactionEnd: { txId: "T1", meterStart: 10, meterStop: 10.5, energyWh: 500, reason: "remote", requestId: "r" },
+    });
+    expect(i.ingest("devices/SONIK-1/tx/meter", JSON.stringify({ txId: "T1", seq: 1, energyWh: 50, meterKwh: 10.05, reading: { model: "SDM120", ok: true, power: 5 } }), now)).toMatchObject({
+      meterValue: { txId: "T1", seq: 1, energyWh: 50 },
+    });
+    // After the device goes idle, readings are no longer tied to a transaction.
+    i.ingest("devices/SONIK-1/tx", JSON.stringify({ state: "idle" }), now);
+    expect(i.ingest("devices/SONIK-1/meter", JSON.stringify({ model: "SDM120", phases: 1, ok: true, power: 5 }), now)).toMatchObject({ reading: { transactionId: null } });
+    // Malformed transaction messages are dropped like everything else.
+    expect(i.ingest("devices/SONIK-1/tx/end", JSON.stringify({ reason: "remote" }), now)).toBeNull();
   });
 });
 

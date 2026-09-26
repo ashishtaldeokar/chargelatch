@@ -28,6 +28,9 @@ export interface DeviceStore {
   getByIdentity(identity: string): Promise<Device | undefined>;
   list(limit: number): Promise<Device[]>;
   markFlashed(id: number, firmwareVersion: string): Promise<Device | undefined>;
+  /** Assigns (or, with null, unassigns) the tenant allowed to run transactions on the device. */
+  setTenant(id: number, tenantId: string | null): Promise<Device | undefined>;
+  listForTenant(tenantId: string): Promise<Device[]>;
 }
 
 export function createDeviceStore(db: Db): DeviceStore {
@@ -56,6 +59,8 @@ export function createDeviceStore(db: Db): DeviceStore {
     get: async (id) => (await db.select().from(devices).where(eq(devices.id, id)))[0],
     getByIdentity: async (identity) => (await db.select().from(devices).where(eq(devices.identity, identity)))[0],
     list: (limit) => db.select().from(devices).orderBy(desc(devices.id)).limit(limit),
+    setTenant: async (id, tenantId) => (await db.update(devices).set({ tenantId }).where(eq(devices.id, id)).returning())[0],
+    listForTenant: (tenantId) => db.select().from(devices).where(eq(devices.tenantId, tenantId)).orderBy(desc(devices.id)),
     markFlashed: async (id, firmwareVersion) =>
       (
         await db

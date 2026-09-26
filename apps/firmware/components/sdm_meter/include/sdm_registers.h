@@ -77,6 +77,9 @@ extern const sdm_model_t SDM_MODEL_SDM630;
 extern const sdm_model_t *const SDM_MODELS[];
 extern const size_t SDM_MODEL_COUNT;
 
+/** Index of `key` in the model's table, or -1. */
+int sdm_model_index_of(const sdm_model_t *model, const char *key);
+
 /** Looks a model up by name ("SDM120"), or NULL. */
 const sdm_model_t *sdm_model_by_name(const char *name);
 

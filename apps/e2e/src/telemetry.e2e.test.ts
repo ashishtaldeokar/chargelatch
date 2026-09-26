@@ -48,7 +48,7 @@ beforeAll(async () => {
     const result = ingester.ingest(topic, payload.toString(), new Date());
     if (!result) return;
     if ("reading" in result) writer.addReading(result.reading);
-    else writer.addEvent(result.event);
+    else if ("event" in result) writer.addEvent(result.event);
   });
   await subscriber.subscribeAsync(DEVICE_STATE_TOPICS, { qos: 1 });
 

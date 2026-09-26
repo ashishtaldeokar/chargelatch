@@ -1,5 +1,16 @@
 // Turns device MQTT messages into rows. Pure: no I/O, so it is unit-tested directly.
-import { applyMessage, emptyDeviceState, parseDeviceTopic, parsePayload, type LiveDeviceState } from "@chargelatch/device-protocol";
+import {
+  applyMessage,
+  emptyDeviceState,
+  parseDeviceTopic,
+  parsePayload,
+  parseTransactionEnd,
+  parseTransactionMeterValue,
+  type LiveDeviceState,
+  type TransactionEnd,
+  type TransactionMeterValue,
+  type TransactionState,
+} from "@chargelatch/device-protocol";
 import type { DeviceEventRow, MeterReadingRow } from "@chargelatch/db";
 
 /** Meter JSON keys that have their own column. Anything else lands in `extra`. */
@@ -32,7 +43,13 @@ const METER_COLUMNS: Record<string, keyof MeterReadingRow> = {
   power_factor_l3: "powerFactorL3",
 };
 
-export type IngestResult = { reading: MeterReadingRow } | { event: DeviceEventRow } | null;
+export type IngestResult =
+  | { reading: MeterReadingRow }
+  | { event: DeviceEventRow }
+  | { transaction: TransactionState }
+  | { transactionEnd: TransactionEnd }
+  | { meterValue: TransactionMeterValue }
+  | null;
 
 /**
  * Keeps the last known state per identity so that only CHANGES become events: every reconnect
@@ -41,7 +58,16 @@ export type IngestResult = { reading: MeterReadingRow } | { event: DeviceEventRo
 export class Ingester {
   private readonly states = new Map<string, LiveDeviceState>();
 
-  constructor(private readonly resolveDeviceId: (identity: string) => number | undefined) {}
+  constructor(
+    private readonly resolveDeviceId: (identity: string) => number | undefined,
+    /** Our transactions.id for the device's transaction id, so readings can be tied to a session. */
+    private readonly resolveTransaction: (deviceId: number, txId: string) => string | undefined = () => undefined,
+  ) {}
+
+  /** The device's own view of its transaction, from the last retained tx message. */
+  transactionOf(identity: string): TransactionState | null {
+    return this.states.get(identity)?.transaction ?? null;
+  }
 
   ingest(topic: string, payload: string, now: Date): IngestResult {
     const parsed = parseDeviceTopic(topic);
@@ -54,14 +80,35 @@ export class Ingester {
 
     const previous = this.states.get(identity) ?? emptyDeviceState(identity);
     const data = parsePayload(payload);
+
+    // Transaction messages are not device state changes in the reducer's sense (tx/end and
+    // tx/meter are events), so they are handled before it.
+    if (kind === "tx/end") {
+      const end = parseTransactionEnd(data);
+      return end ? { transactionEnd: end } : null;
+    }
+    if (kind === "tx/meter") {
+      const value = parseTransactionMeterValue(data, now);
+      return value ? { meterValue: value } : null;
+    }
     const next = applyMessage(previous, kind, data, now);
     if (!next) return null;
     this.states.set(identity, next);
 
     switch (kind) {
+      case "tx":
+        return { transaction: next.transaction! };
       case "meter": {
         const meter = next.meter!;
-        const reading: MeterReadingRow = { time: now, deviceId, model: meter.model, ok: meter.ok, error: meter.error ?? null };
+        const active = next.transaction?.active ? next.transaction.txId : null;
+        const reading: MeterReadingRow = {
+          time: now,
+          deviceId,
+          transactionId: active ? (this.resolveTransaction(deviceId, active) ?? null) : null,
+          model: meter.model,
+          ok: meter.ok,
+          error: meter.error ?? null,
+        };
         const extra: Record<string, number> = {};
         for (const [key, value] of Object.entries(meter.values)) {
           const column = METER_COLUMNS[key];

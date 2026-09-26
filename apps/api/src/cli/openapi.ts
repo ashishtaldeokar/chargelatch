@@ -5,9 +5,11 @@ import { createApp, openApiInfo } from "../app.ts";
 const unused = () => Promise.reject(new Error("not available while generating the spec"));
 const app = createApp({
   users: { list: unused, create: unused },
-  devices: { register: unused, get: unused, getByIdentity: unused, list: unused, markFlashed: unused },
-  bus: { getState: () => { throw new Error("unused"); }, setRelay: unused },
+  devices: { register: unused, get: unused, getByIdentity: unused, list: unused, markFlashed: unused, setTenant: unused, listForTenant: unused },
+  bus: { getState: () => { throw new Error("unused"); }, setRelay: unused, sendTransactionCommand: unused },
   telemetry: { recentPower: unused },
+  tenants: { create: unused, update: unused, list: unused, get: unused, getByClientId: unused },
+  transactions: { create: unused, get: unused, openForDevice: unused, markStopping: unused, listForTenant: unused },
   auth: { verify: unused },
 });
 

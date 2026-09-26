@@ -49,3 +49,37 @@ select * from timescaledb_information.job_stats
 **Changing the aggregate:** add the column to `meter_readings_15m` in a migration (`ALTER TABLE`),
 `CREATE OR REPLACE` the function to fill it, then backfill with the call above while the raw data
 still exists. Existing rows and columns are untouched.
+
+## Charging transactions and webhooks
+
+This service is the **system of record** for transactions: the API only creates them
+(`starting`) and flags stops (`stopping`); every other transition comes from the device's
+`tx`, `tx/end` and `tx/meter` messages (`src/transactions.ts`), and each transition writes the
+tenant's event into the `webhook_deliveries` outbox in the same flow. `src/webhooks.ts` delivers
+the outbox: per tenant, in creation order, where an undelivered event blocks only later events of
+the *same* transaction. `TransactionStarted`/`Stopped`/`Failed` retry with backoff
+(1 min → 5 → 30 → 2 h → 6 h → 24 h, then `failed`); `MeterValues` get one attempt.
+
+| Device says | Row was | Result |
+| --- | --- | --- |
+| `tx` active T | `starting` | `active`, `startedAt`, **TransactionStarted** |
+| `tx` active T | `stopping` | stop re-sent (a stop queued while the device was offline) |
+| `tx` active T | `failed` or unknown | stop sent: nothing charges that the backend thinks is over |
+| `tx/end` T | any open | `stopped`, summary (device energy + stats over its `meter_readings`), **TransactionStopped** |
+| `tx/meter` T | `active`/`stopping` | **MeterValues** (best effort) |
+| (sweep, 15 s) | `starting` > 60 s | `failed`, **TransactionFailed** |
+
+Webhook payload, one shape for every event:
+
+```json
+{ "eventType": "TransactionStopped", "eventId": "…", "sequence": 3, "occurredAt": "…",
+  "tenantId": "sonik", "deviceIdentity": "SONIK-42", "transactionId": "TX-2026-000123",
+  "data": { "startedAt": "…", "stoppedAt": "…", "durationSeconds": 1820, "stopReason": "remote",
+            "energyWh": 7420.5, "energyQuality": "metered", "meterStartKwh": 1234.75, "meterStopKwh": 1242.17,
+            "powerAvgW": 6900, "powerMaxW": 7200, "currentMaxA": 31.3, "voltageMinV": 229, "voltageMaxV": 231,
+            "sampleCount": 364, "meterUnreadableSamples": 0 } }
+```
+
+`sequence` counts per transaction from 1. A 2xx response is the acknowledgement; anything else
+is retried. No signature yet (decided later); an `X-Chargelatch-Signature` HMAC is the planned
+addition.

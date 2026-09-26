@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/ingest.ts",
-    "./writer": "./src/writer.ts"
+    "./writer": "./src/writer.ts",
+    "./transactions": "./src/transactions.ts",
+    "./webhooks": "./src/webhooks.ts"
   },
   "scripts": {
     "dev": "bun --watch src/index.ts",

@@ -120,6 +120,20 @@ static void test_block_planning(void)
     CHECK(sdm_modbus_plan_blocks(SDM_MODEL_SDM120.registers, SDM_MODEL_SDM120.register_count, blocks, 2) == 0);
 }
 
+static void test_lookup(void)
+{
+    CHECK(sdm_model_by_name("SDM120") == &SDM_MODEL_SDM120);
+    CHECK(sdm_model_by_name("SDM630") == &SDM_MODEL_SDM630);
+    CHECK(sdm_model_by_name("nope") == NULL);
+    CHECK(sdm_model_by_name(NULL) == NULL);
+    /* Every model must expose the cumulative counter transactions are billed from. */
+    for (size_t i = 0; i < SDM_MODEL_COUNT; i++) {
+        CHECK(sdm_model_index_of(SDM_MODELS[i], "total_energy") >= 0);
+        CHECK(strcmp(SDM_MODELS[i]->registers[sdm_model_index_of(SDM_MODELS[i], "power")].key, "power") == 0);
+    }
+    CHECK(sdm_model_index_of(&SDM_MODEL_SDM120, "voltage_l2") == -1);
+}
+
 static void test_json(void)
 {
     char json[SDM_JSON_MAX_LEN];
@@ -182,6 +196,7 @@ int main(void)
     test_exception();
     test_block_planning();
     test_json();
+    test_lookup();
     printf(failures ? "%d FAILED\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

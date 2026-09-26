@@ -1,0 +1,11 @@
+menu "chargelatch charging session"
+
+    config CHARGING_SESSION_METER_INTERVAL_SECONDS
+        int "Default meter-value interval during a transaction (seconds)"
+        default 30
+        range 5 3600
+        help
+            How often devices/<id>/tx/meter is published while a transaction is active. A start
+            command may override it per transaction ("interval", same bounds).
+
+endmenu

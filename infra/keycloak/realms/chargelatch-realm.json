@@ -98,6 +98,15 @@
         "attributes": {}
       },
       {
+        "id": "40bd02f7-37e8-400d-81b8-274792641067",
+        "name": "partner",
+        "description": "Third-party platform (tenant) allowed to run charging transactions on its devices via /api/partner/*",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "7cab7dcd-bfc3-429b-965f-3a762f126bf1",
+        "attributes": {}
+      },
+      {
         "id": "71933686-2c5e-407b-9701-b3fadf738584",
         "name": "user",
         "description": "Regular end user",
@@ -385,6 +394,7 @@
           "attributes": {}
         }
       ],
+      "chargelatch-partner-sonik": [],
       "account": [
         {
           "id": "b2d9968d-e967-48e1-9536-906ad4b49cb0",
@@ -603,6 +613,24 @@
       "realmRoles": [
         "admin",
         "default-roles-chargelatch"
+      ],
+      "notBefore": 0,
+      "groups": []
+    },
+    {
+      "id": "5e6fdb24-b9d5-4ef2-bb23-bf7b6552b349",
+      "username": "service-account-chargelatch-partner-sonik",
+      "emailVerified": false,
+      "enabled": true,
+      "createdTimestamp": 1790404992042,
+      "totp": false,
+      "serviceAccountClientId": "chargelatch-partner-sonik",
+      "credentials": [],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "default-roles-chargelatch",
+        "partner"
       ],
       "notBefore": 0,
       "groups": []
@@ -1151,6 +1179,72 @@
       ],
       "defaultClientScopes": [
         "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "organization",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "id": "663002e6-ce8b-4742-8ea1-255894663cda",
+      "clientId": "chargelatch-partner-sonik",
+      "name": "Sonik (partner service account)",
+      "description": "Tenant \"sonik\": client_credentials only. The API maps this client id to the tenant.",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-sonik-secret",
+      "redirectUris": [],
+      "webOrigins": [
+        "http://localhost:3100",
+        "http://localhost:3000"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "protocolMappers": [
+        {
+          "id": "ddec55b4-5f72-46fe-bd79-14be59c33bcd",
+          "name": "chargelatch-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "chargelatch-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "service_account",
         "acr",
         "profile",
         "roles",

@@ -4,6 +4,8 @@ import { createMiddleware } from "hono/factory";
 export interface AuthClaims {
   sub: string;
   email?: string;
+  /** The Keycloak client the token was issued to (`azp`); identifies service accounts. */
+  clientId?: string;
   roles: string[];
 }
 
@@ -28,6 +30,7 @@ export function createKeycloakVerifier(issuer: string, audience: string): TokenV
       return {
         sub: payload.sub ?? "",
         email: typeof payload.email === "string" ? payload.email : undefined,
+        clientId: typeof payload.azp === "string" ? payload.azp : undefined,
         roles: realmAccess?.roles ?? [],
       };
     },

@@ -4,6 +4,8 @@ import { createKeycloakVerifier } from "./auth.ts";
 import { MqttDeviceBus } from "./device-bus.ts";
 import { createDeviceStore } from "./devices.ts";
 import { createTelemetryStore } from "./telemetry.ts";
+import { createTenantStore } from "./tenants.ts";
+import { createTransactionStore } from "./transactions.ts";
 import { createUserStore } from "./users.ts";
 
 const { db, close: closeDb } = createDb(requireDatabaseUrl());
@@ -22,6 +24,9 @@ const app = createApp({
   devices: createDeviceStore(db),
   bus,
   telemetry: createTelemetryStore(db),
+  tenants: createTenantStore(db),
+  transactions: createTransactionStore(db),
+  tokenUrl: `${issuer}/protocol/openid-connect/token`,
   auth: createKeycloakVerifier(issuer, process.env.KEYCLOAK_AUDIENCE ?? "chargelatch-api"),
 });
 

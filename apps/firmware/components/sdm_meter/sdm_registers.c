@@ -60,6 +60,16 @@ const sdm_model_t SDM_MODEL_SDM630 = { "SDM630", 3, sdm630_registers, COUNT(sdm6
 const sdm_model_t *const SDM_MODELS[] = { &SDM_MODEL_SDM120, &SDM_MODEL_SDM630 };
 const size_t SDM_MODEL_COUNT = COUNT(SDM_MODELS);
 
+int sdm_model_index_of(const sdm_model_t *model, const char *key)
+{
+    for (size_t i = 0; model && key && i < model->register_count; i++) {
+        if (strcmp(model->registers[i].key, key) == 0) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 const sdm_model_t *sdm_model_by_name(const char *name)
 {
     for (size_t i = 0; name && i < SDM_MODEL_COUNT; i++) {
